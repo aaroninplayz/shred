@@ -74,6 +74,32 @@ class SettingsViewModel(
         }
     }
 
+    fun addExcludedFolder(path: String) {
+        if (path.isBlank()) return
+        val current = getExcludedFoldersList().toMutableList()
+        current.add(path.trim())
+        val json = JSONArray(current).toString()
+        updateSettings(_settings.value.copy(excludedFolders = json))
+    }
+
+    fun removeExcludedFolder(index: Int) {
+        val current = getExcludedFoldersList().toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            val json = JSONArray(current).toString()
+            updateSettings(_settings.value.copy(excludedFolders = json))
+        }
+    }
+
+    fun getExcludedFoldersList(): List<String> {
+        return try {
+            val array = JSONArray(_settings.value.excludedFolders)
+            List(array.length()) { array.getString(it) }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     fun clearToast() {
         _toastMessage.value = null
     }

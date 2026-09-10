@@ -108,6 +108,91 @@ fun SettingsScreen(
                     onSelected = { viewModel.updateSettings(settings.copy(sortOrder = it)) }
                 )
 
+                // Section 2.1: Scan Filters & Exclusions
+                SettingsSectionHeader("02B. SCANNING & FILTERS")
+
+                SettingScanModeSelector(
+                    current = settings.scanMode,
+                    onSelected = { viewModel.updateSettings(settings.copy(scanMode = it)) }
+                )
+
+                SettingSlider(
+                    label = "MINIMUM FILE SIZE",
+                    valueText = "${settings.minFileSizeBytes / (1024 * 1024)} MB",
+                    value = (settings.minFileSizeBytes / (1024 * 1024)).toFloat(),
+                    valueRange = 0f..200f,
+                    onValueChange = { viewModel.updateSettings(settings.copy(minFileSizeBytes = (it.toLong() * 1024 * 1024))) }
+                )
+
+                Text(
+                    text = "EXCLUDED FOLDERS FROM SCAN:",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = colors.textSecondary
+                )
+
+                val excludedFolders = viewModel.getExcludedFoldersList()
+                excludedFolders.forEachIndexed { index, folder ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(1.dp, colors.borderSubtle)
+                            .background(colors.surface)
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = folder,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 10.sp,
+                            color = colors.textPrimary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { viewModel.removeExcludedFolder(index) }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete exclusion",
+                                tint = Color(0xFFFF3B30),
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
+
+                var newFolderText by remember { mutableStateOf("") }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = newFolderText,
+                        onValueChange = { newFolderText = it },
+                        placeholder = { Text("FOLDER PATH...", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    Box(
+                        modifier = Modifier
+                            .border(2.dp, colors.accent)
+                            .clickable {
+                                viewModel.addExcludedFolder(newFolderText)
+                                newFolderText = ""
+                            }
+                            .padding(horizontal = 12.dp, vertical = 14.dp)
+                    ) {
+                        Text(
+                            text = "+ ADD",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 11.sp,
+                            color = colors.accent
+                        )
+                    }
+                }
+
                 // Section 3: Trash & Auto-Purge
                 SettingsSectionHeader("03. TRASH RETENTION")
 
@@ -527,6 +612,46 @@ private fun SettingTransitionSelector(current: TransitionStyle, onSelected: (Tra
                 ) {
                     Text(
                         text = trans.name.replace("_", "\n"),
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 9.sp,
+                        color = if (isSelected) colors.accent else colors.textSecondary,
+                        lineHeight = 11.sp
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingScanModeSelector(current: ScanMode, onSelected: (ScanMode) -> Unit) {
+    val colors = LocalShredColors.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.5.dp, colors.borderSubtle)
+            .background(colors.surface)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("SCAN MODE", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ScanMode.values().forEach { mode ->
+                val isSelected = current == mode
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle)
+                        .background(if (isSelected) colors.cardBackground else colors.surface)
+                        .clickable { onSelected(mode) }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = mode.name.replace("_", "\n"),
                         fontFamily = FontFamily.Monospace,
                         fontSize = 9.sp,
                         color = if (isSelected) colors.accent else colors.textSecondary,

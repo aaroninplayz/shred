@@ -16,6 +16,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.ArrayDeque
 
+import androidx.exifinterface.media.ExifInterface
+
 class MediaScanner(
     private val context: Context,
     private val mediaRepository: MediaRepository
@@ -43,7 +45,6 @@ class MediaScanner(
         while (queue.isNotEmpty()) {
             val currentDir = queue.poll() ?: continue
 
-            // Skip excluded or system/trash paths
             val currentPath = currentDir.absolutePath
             if (currentPath.startsWith(trashFolderPath)) continue
             if (excludedFolders.any { currentPath.startsWith(it) }) continue
@@ -58,7 +59,6 @@ class MediaScanner(
             for (file in files) {
                 scannedTotal++
                 if (file.isDirectory) {
-                    // Do not descend into app trash
                     if (!file.absolutePath.startsWith(trashFolderPath)) {
                         queue.add(file)
                     }
@@ -72,6 +72,48 @@ class MediaScanner(
                         val folderPath = parentFolder?.absolutePath ?: rootDir.absolutePath
                         val folderName = parentFolder?.name?.ifEmpty { "Storage" } ?: "Storage"
 
+                        var width = 0
+                        var height = 0
+                        var durationMs = 0L
+                        var dateTaken = file.lastModified()
+
+                        // Extract rich metadata based on type
+                        try {
+                            when (mediaType) {
+                                MediaType.PHOTO -> {
+                                    if (ext in setOf("jpg", "jpeg", "png", "webp", "heic", "heif", "dng", "raw")) {
+                                        val exif = ExifInterface(file.absolutePath)
+                                        width = exif.getAttributeInt(ExifInterface.TAG_IMAGE_WIDTH, 0)
+                                        height = exif.getAttributeInt(ExifInterface.TAG_IMAGE_LENGTH, 0)
+                                        val exifDate = exif.dateTime
+                                        if (exifDate != null && exifDate > 0) {
+                                            dateTaken = exifDate
+                                        }
+                                    }
+                                }
+                                MediaType.VIDEO,
+                                MediaType.AUDIO -> {
+                                    MediaMetadataRetriever().use { mmr ->
+                                        try {
+                                            mmr.setDataSource(file.absolutePath)
+                                            val durStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                                            durationMs = durStr?.toLongOrNull() ?: 0L
+                                            if (mediaType == MediaType.VIDEO) {
+                                                val wStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)
+                                                val hStr = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)
+                                                width = wStr?.toIntOrNull() ?: 0
+                                                height = hStr?.toIntOrNull() ?: 0
+                                            }
+                                        } catch (e: Exception) {
+                                            // Handle corrupted video/audio metadata gracefully
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Error extracting metadata for ${file.name}", e)
+                        }
+
                         val mediaFile = MediaFile(
                             path = file.absolutePath,
                             fileName = file.name,
@@ -79,7 +121,10 @@ class MediaScanner(
                             folderName = folderName,
                             sizeBytes = file.length(),
                             dateModified = file.lastModified(),
-                            dateTaken = file.lastModified(),
+                            dateTaken = dateTaken,
+                            width = width,
+                            height = height,
+                            durationMs = durationMs,
                             extension = ext,
                             mediaType = mediaType,
                             isHidden = isHidden
