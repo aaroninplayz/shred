@@ -4,6 +4,30 @@ All notable changes to the **SHRED** project are documented in this file.
 
 ---
 
+## [v1.5.0] - Hot Air Balloon Buoyancy, Night-and-Day Themes & MediaStore Scanner
+
+### 🎈 Hot Air Balloon Playground & Physics
+- Replaced category blocks with vector-rendered **Hot Air Balloons** matching reference silhouette (rounded dome top, 3D stripe gores, straight diagonal side tapered neck, and clean carriage basket).
+- Implemented **Average-Size Buoyancy Physics** ($\text{Average Size} = \text{Total Size} / \text{Count}$) driving vertical float velocity and altitude.
+- Integrated 2D rigid-body Separating Axis Theorem (SAT) collision detection, wall reflections, pointer flick impulses, and drag physics.
+- Formatted carriage basket text strictly to `[Category]` and `$count FILES • $sizeFormatted`.
+
+### 🎨 Design System & Night-and-Day Themes
+- Rebuilt UI theme engine with 3 distinct styles:
+  - 🗿 **Brutalism**: High-contrast monochrome layout with solid 3dp borders, hard shadows, and high-energy accent buttons.
+  - 🧘 **Minimalism**: Clean ultra-light aesthetic with subtle hairline borders, soft neutral cards, and generous white space.
+  - 🪞 **Glassmorphism**: Translucent frosted glass visuals, gradient glow effects, and multi-layered acrylic depth.
+
+### 🗄️ MediaScanner & Media Store Fallback
+- Added `scanMediaStore()` ContentResolver indexing fallback across `Images`, `Video`, and `Audio` query URIs.
+- Configured multi-root directory seeding (`DCIM`, `Pictures`, `Movies`, `Music`, `Downloads`, `Documents`, `WhatsApp`, `Telegram`) to guarantee instant file discovery on startup.
+
+### 🎧 Audio Visualizer & Dark Zoom Backdrop
+- Replaced play/pause buttons with real-time reactive frequency audio visualizer bars, tap-to-toggle playback, and an interactive bottom progress scrubber line.
+- Redesigned photo/video zoom mode to use a full black backdrop hiding white borders and framing controls.
+
+---
+
 ## [v1.0.0] - Production Release
 
 ### 🚀 Highlights
