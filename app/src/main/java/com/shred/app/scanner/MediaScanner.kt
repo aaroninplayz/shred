@@ -27,6 +27,8 @@ import java.util.ArrayDeque
 
 import androidx.exifinterface.media.ExifInterface
 
+import android.provider.MediaStore
+
 class MediaScanner(
     private val context: Context,
     private val mediaRepository: MediaRepository
@@ -81,12 +83,68 @@ class MediaScanner(
         }
     }
 
+    private fun scanMediaStore(minSizeBytes: Long, excludedFolders: List<String>): List<MediaFile> {
+        val result = mutableListOf<MediaFile>()
+        val projection = arrayOf(
+            MediaStore.MediaColumns.DATA,
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.SIZE,
+            MediaStore.MediaColumns.DATE_MODIFIED
+        )
+
+        val uris = listOf(
+            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        )
+
+        for (uri in uris) {
+            try {
+                context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                    val dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                    if (dataCol == -1) return@use
+
+                    while (cursor.moveToNext()) {
+                        val path = cursor.getString(dataCol) ?: continue
+                        val file = File(path)
+                        if (!file.exists() || !file.canRead() || file.length() < minSizeBytes) continue
+
+                        val ext = file.extension.lowercase()
+                        val mediaType = FileExtensionRegistry.getMediaType(ext) ?: continue
+                        if (excludedFolders.any { path.startsWith(it) }) continue
+
+                        val parentFolder = file.parentFile
+                        val folderPath = parentFolder?.absolutePath ?: ""
+                        val folderName = parentFolder?.name?.ifEmpty { "Storage" } ?: "Storage"
+
+                        result.add(
+                            MediaFile(
+                                path = path,
+                                fileName = file.name,
+                                folderPath = folderPath,
+                                folderName = folderName,
+                                sizeBytes = file.length(),
+                                dateModified = file.lastModified(),
+                                dateTaken = file.lastModified(),
+                                width = 0,
+                                height = 0,
+                                durationMs = 0L,
+                                extension = ext,
+                                mediaType = mediaType,
+                                isHidden = file.name.startsWith(".")
+                            )
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "MediaStore query error", e)
+            }
+        }
+        return result
+    }
+
     fun scanFileSystem(excludedFolders: List<String> = emptyList(), minSizeBytes: Long = 0): Flow<ScanProgress> = flow {
         val rootDir = Environment.getExternalStorageDirectory()
-        if (rootDir == null || !rootDir.exists()) {
-            emit(ScanProgress(isComplete = true))
-            return@flow
-        }
 
         var scannedTotal = 0
         var mediaTotal = 0
@@ -99,8 +157,62 @@ class MediaScanner(
 
         var lastEmitTime = System.currentTimeMillis()
         val batch = mutableListOf<MediaFile>()
+
+        // 1. Initial High-Speed MediaStore ContentResolver Pass
+        val mediaStoreFiles = scanMediaStore(minSizeBytes, excludedFolders)
+        if (mediaStoreFiles.isNotEmpty()) {
+            mediaRepository.insertDiscoveredFiles(mediaStoreFiles)
+            mediaStoreFiles.forEach { file ->
+                mediaTotal++
+                scannedTotal++
+                when (file.mediaType) {
+                    MediaType.PHOTO -> { photosTotal++; photosSize += file.sizeBytes }
+                    MediaType.VIDEO -> { videosTotal++; videosSize += file.sizeBytes }
+                    MediaType.AUDIO -> { audioTotal++; audioSize += file.sizeBytes }
+                }
+            }
+            emit(
+                ScanProgress(
+                    scannedCount = scannedTotal,
+                    discoveredMediaCount = mediaTotal,
+                    discoveredPhotosCount = photosTotal,
+                    discoveredVideosCount = videosTotal,
+                    discoveredAudioCount = audioTotal,
+                    discoveredPhotosSize = photosSize,
+                    discoveredVideosSize = videosSize,
+                    discoveredAudioSize = audioSize,
+                    currentPath = "MediaStore Indexing",
+                    isComplete = false
+                )
+            )
+        }
+
+        if (rootDir == null || !rootDir.exists()) {
+            emit(ScanProgress(isComplete = true))
+            return@flow
+        }
+
+        // 2. Multi-Root Filesystem Crawler (DCIM, Pictures, Downloads, WhatsApp, Root)
+        val seedRoots = listOfNotNull(
+            rootDir,
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+            File(rootDir, "Android/media"),
+            File(rootDir, "WhatsApp/Media"),
+            File(rootDir, "Telegram")
+        ).filter { it.exists() && it.isDirectory }
+
+        val visitedDirs = mutableSetOf<String>()
         val queue = ArrayDeque<File>()
-        queue.add(rootDir)
+        seedRoots.forEach { dir ->
+            if (visitedDirs.add(dir.absolutePath)) {
+                queue.add(dir)
+            }
+        }
 
         val trashFolderPath = File(rootDir, ".PhoneCleaner/trash").absolutePath
 
