@@ -150,10 +150,13 @@ fun HomeScreen(
             FloatingCategoryPlayground(
                 photoCount = state.photoCount,
                 photoSizeFormatted = FileSizeFormatter.format(state.photoSize),
+                photoSizeBytes = state.photoSize,
                 videoCount = state.videoCount,
                 videoSizeFormatted = FileSizeFormatter.format(state.videoSize),
+                videoSizeBytes = state.videoSize,
                 audioCount = state.audioCount,
                 audioSizeFormatted = FileSizeFormatter.format(state.audioSize),
+                audioSizeBytes = state.audioSize,
                 containerWidth = widthPx,
                 containerHeight = heightPx,
                 shredderThresholdY = shredderThresholdY,

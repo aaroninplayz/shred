@@ -5,16 +5,20 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -43,7 +47,7 @@ class BlockPhysicsState(
     var velocityY by mutableFloatStateOf(0f)
     var isDragging by mutableStateOf(false)
     var width by mutableFloatStateOf(220f)
-    var height by mutableFloatStateOf(95f)
+    var height by mutableFloatStateOf(160f)
     var lastDragTimestamp by mutableLongStateOf(0L)
     var lastDragDelta by mutableStateOf(Offset.Zero)
     var isInitialized by mutableStateOf(false)
@@ -53,10 +57,13 @@ class BlockPhysicsState(
 fun FloatingCategoryPlayground(
     photoCount: Int,
     photoSizeFormatted: String,
+    photoSizeBytes: Long,
     videoCount: Int,
     videoSizeFormatted: String,
+    videoSizeBytes: Long,
     audioCount: Int,
     audioSizeFormatted: String,
+    audioSizeBytes: Long,
     containerWidth: Float,
     containerHeight: Float,
     shredderThresholdY: Float,
@@ -83,7 +90,6 @@ fun FloatingCategoryPlayground(
                 val ay = event.values[1]
                 val az = event.values[2]
 
-                // Negative X so tilting phone right moves objects right
                 accelX = -ax
                 accelY = ay
 
@@ -103,36 +109,36 @@ fun FloatingCategoryPlayground(
         }
     }
 
-    // Initialize block physical states for PHOTO, VIDEO, AUDIO
+    // Initialize physical states for PHOTO, VIDEO, AUDIO Hot Air Balloons
     val photoState = remember { BlockPhysicsState(MediaType.PHOTO) }
     val videoState = remember { BlockPhysicsState(MediaType.VIDEO) }
     val audioState = remember { BlockPhysicsState(MediaType.AUDIO) }
 
     val blocks = remember { listOf(photoState, videoState, audioState) }
 
-    // Sync initial positions when container layout finishes
+    // Initial positioning across screen canvas
     LaunchedEffect(containerWidth, containerHeight) {
         if (containerWidth > 0f && containerHeight > 0f) {
             if (!photoState.isInitialized) {
-                photoState.posX = containerWidth * 0.08f
+                photoState.posX = containerWidth * 0.05f
                 photoState.posY = containerHeight * 0.05f
                 photoState.isInitialized = true
             }
             if (!videoState.isInitialized) {
-                videoState.posX = containerWidth * 0.38f
-                videoState.posY = containerHeight * 0.25f
+                videoState.posX = containerWidth * 0.36f
+                videoState.posY = containerHeight * 0.22f
                 videoState.isInitialized = true
             }
             if (!audioState.isInitialized) {
-                audioState.posX = containerWidth * 0.12f
-                audioState.posY = containerHeight * 0.45f
+                audioState.posX = containerWidth * 0.10f
+                audioState.posY = containerHeight * 0.42f
                 audioState.isInitialized = true
             }
         }
     }
 
-    // Central Multi-Block 2D Physics Simulation & Frame Loop (~60/120 FPS via withFrameNanos)
-    LaunchedEffect(containerWidth, containerHeight, shredderThresholdY) {
+    // Average Category Size Buoyancy Physics Simulation (~60/120 FPS frame loop)
+    LaunchedEffect(containerWidth, containerHeight, shredderThresholdY, photoSizeBytes, videoSizeBytes, audioSizeBytes) {
         var lastTimeNanos = 0L
         var accumulatedTime = 0f
 
@@ -154,20 +160,28 @@ fun FloatingCategoryPlayground(
                 val isShaken = shakeMag > 12.5f
                 val shakeIntensity = if (isShaken) (shakeMag - 9.8f).coerceIn(1f, 25f) else 0f
 
-                // 1. Update individual block physics
+                // Compute Category Average Size for Buoyancy Physics
+                val photoBytes = photoSizeBytes.toFloat()
+                val videoBytes = videoSizeBytes.toFloat()
+                val audioBytes = audioSizeBytes.toFloat()
+                val avgBytes = (photoBytes + videoBytes + audioBytes) / 3f
+
+                val maxDiff = maxOf(abs(photoBytes - avgBytes), abs(videoBytes - avgBytes), abs(audioBytes - avgBytes), 1f)
+
+                // 1. Update individual Hot Air Balloon physics & Buoyancy
                 blocks.forEach { b ->
                     if (!b.isDragging) {
                         val phase = b.mediaType.ordinal * 2.39f
 
-                        // High-energy ambient sinusoidal entropy forces
-                        val ambientAx = sin(accumulatedTime * 1.6f + phase) * 60f + sin(accumulatedTime * 0.8f + phase * 2f) * 30f
-                        val ambientAy = (cos(accumulatedTime * 1.3f + phase.toDouble()) * 50f + cos(accumulatedTime * 0.6f + phase * 1.5f) * 25f).toFloat()
+                        // Ambient sinusoidal breeze forces
+                        val breezeAx = sin(accumulatedTime * 1.4f + phase) * 45f + sin(accumulatedTime * 0.7f + phase * 2f) * 20f
+                        val breezeAy = (cos(accumulatedTime * 1.1f + phase.toDouble()) * 30f).toFloat()
 
-                        // Accelerometer gravity tilt forces (super responsive)
-                        val tiltAx = accelX * 85f
-                        val tiltAy = accelY * 85f
+                        // Accelerometer tilt forces
+                        val tiltAx = accelX * 80f
+                        val tiltAy = accelY * 80f
 
-                        // Violent Shake Impulse
+                        // Violent Shake Impulses
                         var shakeAx = 0f
                         var shakeAy = 0f
                         if (isShaken) {
@@ -175,11 +189,23 @@ fun FloatingCategoryPlayground(
                             shakeAy = (accelY * 90f + Random.nextFloat() * 600f - 300f) * (shakeIntensity / 8f)
                         }
 
-                        b.velocityX += (ambientAx + tiltAx + shakeAx) * dt
-                        b.velocityY += (ambientAy + tiltAy + shakeAy) * dt
+                        // Buoyancy Differential relative to Average Category Size
+                        val catBytes = when (b.mediaType) {
+                            MediaType.PHOTO -> photoBytes
+                            MediaType.VIDEO -> videoBytes
+                            MediaType.AUDIO -> audioBytes
+                        }
+                        val diffBytes = catBytes - avgBytes
+                        val normalizedRatio = (diffBytes / maxDiff).coerceIn(-1f, 1f)
+
+                        // Heavier than average -> sinks downward (+Y). Lighter than average -> floats upward (-Y)
+                        val buoyancyAy = normalizedRatio * 210f
+
+                        b.velocityX += (breezeAx + tiltAx + shakeAx) * dt
+                        b.velocityY += (breezeAy + tiltAy + shakeAy + buoyancyAy) * dt
 
                         // Speed clamping
-                        val maxSpeed = if (isShaken) 1800f else 650f
+                        val maxSpeed = if (isShaken) 1800f else 600f
                         val speed = sqrt(b.velocityX * b.velocityX + b.velocityY * b.velocityY)
                         if (speed > maxSpeed) {
                             b.velocityX = (b.velocityX / speed) * maxSpeed
@@ -189,9 +215,9 @@ fun FloatingCategoryPlayground(
                         b.posX += b.velocityX * dt
                         b.posY += b.velocityY * dt
 
-                        // Smooth glidability (reduced friction)
-                        b.velocityX *= 0.992f
-                        b.velocityY *= 0.992f
+                        // Smooth glidability
+                        b.velocityX *= 0.991f
+                        b.velocityY *= 0.991f
 
                         // Wall Collision Resolution (Left & Right)
                         if (b.posX <= 12f) {
@@ -202,15 +228,15 @@ fun FloatingCategoryPlayground(
                             b.velocityX = -abs(b.velocityX) * 0.85f - 30f
                         }
 
-                        // Wall Collision Resolution (Ceiling)
+                        // Wall Collision Resolution (Ceiling Sky)
                         if (b.posY <= 12f) {
                             b.posY = 12f
                             b.velocityY = abs(b.velocityY) * 0.85f + 30f
                         }
 
                         // Shredder Floor Collision / Feed Slot
-                        val cardBottom = b.posY + b.height
-                        if (cardBottom >= shredderTop - 10f) {
+                        val balloonBottom = b.posY + b.height
+                        if (balloonBottom >= shredderTop - 10f) {
                             if (b.velocityY > 500f || b.posY >= shredderTop + 20f) {
                                 onThrownIntoShredder(b.mediaType)
                             } else {
@@ -221,7 +247,7 @@ fun FloatingCategoryPlayground(
                     }
                 }
 
-                // 2. Pairwise AABB Box-Box Collision Resolution (No Overlap & Elastic Bouncing)
+                // 2. Pairwise AABB Collision Resolution (Zero Overlap & Elastic Bouncing)
                 for (i in 0 until blocks.size) {
                     for (j in i + 1 until blocks.size) {
                         val b1 = blocks[i]
@@ -242,7 +268,6 @@ fun FloatingCategoryPlayground(
                         val overlapY = minDistanceY - abs(dy)
 
                         if (overlapX > 0f && overlapY > 0f) {
-                            // Resolve collision along axis of minimal penetration
                             if (overlapX < overlapY) {
                                 val sign = if (dx != 0f) (if (dx > 0f) 1f else -1f) else (if (i % 2 == 0) 1f else -1f)
                                 val push = (overlapX / 2f) + 1f
@@ -281,6 +306,11 @@ fun FloatingCategoryPlayground(
         onHoverShredderStateChanged(isAnyHovered)
     }
 
+    val photoBytes = photoSizeBytes.toFloat()
+    val videoBytes = videoSizeBytes.toFloat()
+    val audioBytes = audioSizeBytes.toFloat()
+    val avgBytes = (photoBytes + videoBytes + audioBytes) / 3f
+
     Box(modifier = modifier.fillMaxSize()) {
         blocks.forEach { b ->
             val count = when (b.mediaType) {
@@ -293,14 +323,26 @@ fun FloatingCategoryPlayground(
                 MediaType.VIDEO -> videoSizeFormatted
                 MediaType.AUDIO -> audioSizeFormatted
             }
-
-            val title = when (b.mediaType) {
-                MediaType.PHOTO -> "[ 🖼️ PHOTOS ]"
-                MediaType.VIDEO -> "[ 🎥 VIDEOS ]"
-                MediaType.AUDIO -> "[ 🎧 AUDIO ]"
+            val catBytes = when (b.mediaType) {
+                MediaType.PHOTO -> photoBytes
+                MediaType.VIDEO -> videoBytes
+                MediaType.AUDIO -> audioBytes
             }
 
-            // derivedStateOf prevents recomposition of the composable when b.posY changes during free motion
+            val title = when (b.mediaType) {
+                MediaType.PHOTO -> "PHOTOS"
+                MediaType.VIDEO -> "VIDEOS"
+                MediaType.AUDIO -> "AUDIO"
+            }
+            val emoji = when (b.mediaType) {
+                MediaType.PHOTO -> "🖼️"
+                MediaType.VIDEO -> "🎥"
+                MediaType.AUDIO -> "🎧"
+            }
+
+            val isSinking = catBytes > avgBytes + 1024f
+            val isFloating = catBytes < avgBytes - 1024f
+
             val isOverShredder = remember(b, shredderThresholdY) {
                 derivedStateOf {
                     b.isDragging && (b.posY + b.height >= shredderThresholdY - 40f)
@@ -312,22 +354,11 @@ fun FloatingCategoryPlayground(
                     .graphicsLayer {
                         translationX = b.posX
                         translationY = b.posY
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
-                        clip = true
                     }
                     .onGloballyPositioned { coords ->
                         b.width = coords.size.width.toFloat()
                         b.height = coords.size.height.toFloat()
                     }
-                    .border(
-                        width = colors.borderWidth,
-                        color = if (isOverShredder) colors.accent else if (b.isDragging) colors.textPrimary else colors.border,
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
-                    )
-                    .background(
-                        if (isOverShredder) colors.accent.copy(alpha = 0.15f) else if (b.isDragging) colors.surface else colors.cardBackground,
-                        shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
-                    )
                     .clickable { onThrownIntoShredder(b.mediaType) }
                     .pointerInput(b.mediaType, containerWidth, containerHeight, shredderThresholdY) {
                         detectDragGestures(
@@ -345,9 +376,9 @@ fun FloatingCategoryPlayground(
 
                                 val throwVx = (b.lastDragDelta.x / dt).coerceIn(-3000f, 3000f)
                                 val throwVy = (b.lastDragDelta.y / dt).coerceIn(-3000f, 3000f)
-                                val cardBottom = b.posY + b.height
+                                val balloonBottom = b.posY + b.height
 
-                                if (cardBottom >= shredderThresholdY - 50f || (throwVy > 700f && b.posY > containerHeight * 0.4f)) {
+                                if (balloonBottom >= shredderThresholdY - 50f || (throwVy > 700f && b.posY > containerHeight * 0.4f)) {
                                     onThrownIntoShredder(b.mediaType)
                                 } else {
                                     b.velocityX = throwVx
@@ -366,50 +397,180 @@ fun FloatingCategoryPlayground(
                             }
                         )
                     }
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = title,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 14.sp,
-                        letterSpacing = 1.sp,
-                        color = colors.textPrimary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "$count FILES • $sizeFormatted",
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = colors.textSecondary
-                    )
-                    if (isOverShredder) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "RELEASE TO SHRED! ⚡",
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 10.sp,
-                            color = colors.accent
-                        )
-                    } else if (b.isDragging) {
-                        Spacer(modifier = Modifier.height(2.dp))
-                        Text(
-                            text = "▼ THROW INTO SHREDDER",
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 9.sp,
-                            color = colors.textSecondary
-                        )
-                    }
-                }
+                HotAirBalloonCategory(
+                    mediaType = b.mediaType,
+                    title = title,
+                    emoji = emoji,
+                    count = count,
+                    sizeFormatted = sizeFormatted,
+                    isSinking = isSinking,
+                    isFloating = isFloating,
+                    isDragging = b.isDragging,
+                    isOverShredder = isOverShredder
+                )
             }
         }
     }
 }
+
+@Composable
+private fun HotAirBalloonCategory(
+    mediaType: MediaType,
+    title: String,
+    emoji: String,
+    count: Int,
+    sizeFormatted: String,
+    isSinking: Boolean,
+    isFloating: Boolean,
+    isDragging: Boolean,
+    isOverShredder: Boolean
+) {
+    val colors = LocalShredColors.current
+
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.width(IntrinsicSize.Max)
+    ) {
+        // 1. Hot Air Balloon Envelope (Dome)
+        Box(
+            modifier = Modifier
+                .width(220.dp)
+                .height(115.dp)
+                .then(
+                    if (colors.isGlass) {
+                        Modifier
+                            .shadow(16.dp, RoundedCornerShape(topStart = 60.dp, topEnd = 60.dp, bottomStart = 24.dp, bottomEnd = 24.dp), ambientColor = colors.accent, spotColor = colors.accent)
+                            .background(
+                                colors.cardBackground,
+                                shape = RoundedCornerShape(topStart = 60.dp, topEnd = 60.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                            )
+                            .border(
+                                width = 1.5.dp,
+                                color = if (isOverShredder) colors.accent else if (isDragging) colors.textPrimary else colors.border,
+                                shape = RoundedCornerShape(topStart = 60.dp, topEnd = 60.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
+                            )
+                    } else if (colors.cardCornerRadius > 0.dp) {
+                        // Minimalism
+                        Modifier
+                            .shadow(8.dp, RoundedCornerShape(topStart = 50.dp, topEnd = 50.dp, bottomStart = 20.dp, bottomEnd = 20.dp))
+                            .background(
+                                colors.surface,
+                                shape = RoundedCornerShape(topStart = 50.dp, topEnd = 50.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isOverShredder) colors.accent else if (isDragging) colors.textPrimary else colors.borderSubtle,
+                                shape = RoundedCornerShape(topStart = 50.dp, topEnd = 50.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
+                            )
+                    } else {
+                        // Brutalism
+                        Modifier
+                            .background(
+                                if (isOverShredder) colors.accent.copy(alpha = 0.2f) else colors.cardBackground,
+                                shape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                            )
+                            .border(
+                                width = 3.dp,
+                                color = if (isOverShredder) colors.accent else colors.border,
+                                shape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+                            )
+                    }
+                )
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(emoji, fontSize = 16.sp)
+                    Text(
+                        text = if (colors.cardCornerRadius == 0.dp) "[ $title ]" else title,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 13.sp,
+                        letterSpacing = 1.sp,
+                        color = colors.textPrimary
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Buoyancy Status Indicator Badge
+                val buoyancyBadge = when {
+                    isOverShredder -> "RELEASE TO SHRED! ⚡"
+                    isDragging -> "▼ THROW DOWN TO SHRED"
+                    isSinking -> "HEAVY • SINKS ⚓"
+                    isFloating -> "LIGHT • FLOATS 🎈"
+                    else -> "NEUTRAL BUOYANCY ⚖️"
+                }
+
+                val buoyancyColor = when {
+                    isOverShredder -> colors.accent
+                    isSinking -> Color(0xFFFF5252)
+                    isFloating -> Color(0xFF69F0AE)
+                    else -> colors.textSecondary
+                }
+
+                Text(
+                    text = buoyancyBadge,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp,
+                    color = buoyancyColor
+                )
+            }
+        }
+
+        // 2. Suspension Ropes & Burner Glow
+        val ropeColor = if (colors.isGlass) colors.accent else colors.textSecondary
+        Canvas(
+            modifier = Modifier
+                .width(180.dp)
+                .height(16.dp)
+        ) {
+            val w = size.width
+            val h = size.height
+            // Draw left and right ropes connecting balloon envelope to payload basket
+            drawLine(color = ropeColor, start = Offset(w * 0.25f, 0f), end = Offset(w * 0.35f, h), strokeWidth = 2f)
+            drawLine(color = ropeColor, start = Offset(w * 0.75f, 0f), end = Offset(w * 0.65f, h), strokeWidth = 2f)
+        }
+
+        // 3. Payload Basket
+        Box(
+            modifier = Modifier
+                .width(200.dp)
+                .then(
+                    if (colors.isGlass) {
+                        Modifier
+                            .background(colors.surface, shape = RoundedCornerShape(12.dp))
+                            .border(1.dp, colors.borderSubtle, shape = RoundedCornerShape(12.dp))
+                    } else if (colors.cardCornerRadius > 0.dp) {
+                        Modifier
+                            .background(colors.cardBackground, shape = RoundedCornerShape(10.dp))
+                            .border(1.dp, colors.borderSubtle, shape = RoundedCornerShape(10.dp))
+                    } else {
+                        Modifier
+                            .background(colors.surface, shape = RoundedCornerShape(0.dp))
+                            .border(2.dp, colors.border, shape = RoundedCornerShape(0.dp))
+                    }
+                )
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "$count FILES • $sizeFormatted",
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+                color = colors.textSecondary
+            )
+        }
+    }
+}
+

@@ -383,8 +383,8 @@ private fun SettingThemeSelector(current: ThemeMode, onSelected: (ThemeMode) -> 
             ThemeMode.values().forEach { mode ->
                 val isSelected = current == mode
                 val icon = when (mode) {
-                    ThemeMode.BRUTALISM -> "⬛"
-                    ThemeMode.MINIMALISM -> "▫️"
+                    ThemeMode.BRUTALISM -> "🎈"
+                    ThemeMode.MINIMALISM -> "🎈"
                     ThemeMode.GLASSMORPHISM -> "✨"
                 }
                 val label = when (mode) {
