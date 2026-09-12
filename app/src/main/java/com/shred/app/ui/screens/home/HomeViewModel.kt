@@ -38,18 +38,36 @@ class HomeViewModel(
 
     private val photoStats = combine(
         mediaRepository.getActiveCountFlow(MediaType.PHOTO),
-        mediaRepository.getActiveTotalSizeFlow(MediaType.PHOTO)
-    ) { count, size -> CategoryStats(count, size) }
+        mediaRepository.getActiveTotalSizeFlow(MediaType.PHOTO),
+        mediaRepository.getTotalCountFlow(MediaType.PHOTO),
+        mediaRepository.getTotalSizeFlow(MediaType.PHOTO)
+    ) { activeCount, activeSize, totalCount, totalSize ->
+        val count = if (activeCount == 0 && totalCount > 0) totalCount else activeCount
+        val size = if (activeSize == 0L && totalSize > 0L) totalSize else activeSize
+        CategoryStats(count, size)
+    }
 
     private val videoStats = combine(
         mediaRepository.getActiveCountFlow(MediaType.VIDEO),
-        mediaRepository.getActiveTotalSizeFlow(MediaType.VIDEO)
-    ) { count, size -> CategoryStats(count, size) }
+        mediaRepository.getActiveTotalSizeFlow(MediaType.VIDEO),
+        mediaRepository.getTotalCountFlow(MediaType.VIDEO),
+        mediaRepository.getTotalSizeFlow(MediaType.VIDEO)
+    ) { activeCount, activeSize, totalCount, totalSize ->
+        val count = if (activeCount == 0 && totalCount > 0) totalCount else activeCount
+        val size = if (activeSize == 0L && totalSize > 0L) totalSize else activeSize
+        CategoryStats(count, size)
+    }
 
     private val audioStats = combine(
         mediaRepository.getActiveCountFlow(MediaType.AUDIO),
-        mediaRepository.getActiveTotalSizeFlow(MediaType.AUDIO)
-    ) { count, size -> CategoryStats(count, size) }
+        mediaRepository.getActiveTotalSizeFlow(MediaType.AUDIO),
+        mediaRepository.getTotalCountFlow(MediaType.AUDIO),
+        mediaRepository.getTotalSizeFlow(MediaType.AUDIO)
+    ) { activeCount, activeSize, totalCount, totalSize ->
+        val count = if (activeCount == 0 && totalCount > 0) totalCount else activeCount
+        val size = if (activeSize == 0L && totalSize > 0L) totalSize else activeSize
+        CategoryStats(count, size)
+    }
 
     private val globalStats = combine(
         mediaRepository.getTotalDeletedSizeFlow(),

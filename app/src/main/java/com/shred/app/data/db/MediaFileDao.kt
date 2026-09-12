@@ -41,11 +41,14 @@ interface MediaFileDao {
     @Query("SELECT COUNT(*) FROM media_files WHERE mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0")
     fun getActiveCountFlow(type: MediaType): Flow<Int>
 
-    @Query("SELECT COUNT(*) FROM media_files WHERE mediaType = :type")
+    @Query("SELECT COUNT(*) FROM media_files WHERE mediaType = :type AND isDeleted = 0")
     fun getTotalCountFlow(type: MediaType): Flow<Int>
 
     @Query("SELECT COALESCE(SUM(sizeBytes), 0) FROM media_files WHERE mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0")
     fun getActiveTotalSizeFlow(type: MediaType): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(sizeBytes), 0) FROM media_files WHERE mediaType = :type AND isDeleted = 0")
+    fun getTotalSizeFlow(type: MediaType): Flow<Long>
 
     @Query("SELECT COALESCE(SUM(sizeBytes), 0) FROM media_files WHERE isDeleted = 1")
     fun getTotalDeletedSizeFlow(): Flow<Long>

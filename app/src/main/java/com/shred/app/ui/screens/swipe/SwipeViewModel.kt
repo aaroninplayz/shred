@@ -63,7 +63,12 @@ class SwipeViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)
             val settings = settingsRepository.getSettings()
-            val rawFiles = mediaRepository.getActiveQueue(mediaType)
+            var rawFiles = mediaRepository.getActiveQueue(mediaType)
+
+            if (rawFiles.isEmpty()) {
+                mediaRepository.resetKeptSession()
+                rawFiles = mediaRepository.getActiveQueue(mediaType)
+            }
 
             // Apply Sort Order
             val sortedFiles = when (settings.sortOrder) {

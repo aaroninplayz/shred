@@ -102,36 +102,47 @@ class MediaScanner(
             try {
                 context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
                     val dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+                    val nameCol = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                    val sizeCol = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                    val dateCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_MODIFIED)
+
                     if (dataCol == -1) return@use
 
                     while (cursor.moveToNext()) {
                         val path = cursor.getString(dataCol) ?: continue
-                        val file = File(path)
-                        if (!file.exists() || !file.canRead() || file.length() < minSizeBytes) continue
+                        if (path.isEmpty()) continue
 
-                        val ext = file.extension.lowercase()
+                        val file = File(path)
+                        val sizeBytes = if (sizeCol != -1) cursor.getLong(sizeCol) else if (file.exists()) file.length() else 0L
+                        if (sizeBytes < minSizeBytes) continue
+
+                        val ext = file.extension.lowercase().ifEmpty {
+                            path.substringAfterLast('.', "")
+                        }
                         val mediaType = FileExtensionRegistry.getMediaType(ext) ?: continue
                         if (excludedFolders.any { path.startsWith(it) }) continue
 
                         val parentFolder = file.parentFile
                         val folderPath = parentFolder?.absolutePath ?: ""
                         val folderName = parentFolder?.name?.ifEmpty { "Storage" } ?: "Storage"
+                        val fileName = if (nameCol != -1 && !cursor.getString(nameCol).isNullOrEmpty()) cursor.getString(nameCol) else file.name
+                        val dateMod = if (dateCol != -1) cursor.getLong(dateCol) * 1000L else if (file.exists()) file.lastModified() else System.currentTimeMillis()
 
                         result.add(
                             MediaFile(
                                 path = path,
-                                fileName = file.name,
+                                fileName = fileName,
                                 folderPath = folderPath,
                                 folderName = folderName,
-                                sizeBytes = file.length(),
-                                dateModified = file.lastModified(),
-                                dateTaken = file.lastModified(),
+                                sizeBytes = sizeBytes,
+                                dateModified = dateMod,
+                                dateTaken = dateMod,
                                 width = 0,
                                 height = 0,
                                 durationMs = 0L,
                                 extension = ext,
                                 mediaType = mediaType,
-                                isHidden = file.name.startsWith(".")
+                                isHidden = fileName.startsWith(".")
                             )
                         )
                     }
@@ -236,7 +247,7 @@ class MediaScanner(
                     if (!file.absolutePath.startsWith(trashFolderPath)) {
                         queue.add(file)
                     }
-                } else if (file.isFile && file.exists() && file.canRead() && file.length() >= minSizeBytes) {
+                } else if (file.isFile && file.exists() && file.length() >= minSizeBytes) {
                     val ext = file.extension.lowercase()
                     val mediaType = FileExtensionRegistry.getMediaType(ext)
                     if (mediaType != null) {

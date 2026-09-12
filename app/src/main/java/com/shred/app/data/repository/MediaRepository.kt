@@ -17,7 +17,7 @@ class MediaRepository(
 
         for (file in rawQueue) {
             val diskFile = File(file.path)
-            if (diskFile.exists() && diskFile.canRead() && diskFile.length() > 0L) {
+            if (diskFile.exists() || file.sizeBytes > 0L) {
                 validQueue.add(file)
             } else {
                 missingIds.add(file.id)
@@ -38,6 +38,7 @@ class MediaRepository(
     fun getActiveCountFlow(type: MediaType): Flow<Int> = dao.getActiveCountFlow(type)
     fun getTotalCountFlow(type: MediaType): Flow<Int> = dao.getTotalCountFlow(type)
     fun getActiveTotalSizeFlow(type: MediaType): Flow<Long> = dao.getActiveTotalSizeFlow(type)
+    fun getTotalSizeFlow(type: MediaType): Flow<Long> = dao.getTotalSizeFlow(type)
     fun getTotalDeletedSizeFlow(): Flow<Long> = dao.getTotalDeletedSizeFlow()
     fun getTotalDeletedCountFlow(): Flow<Int> = dao.getTotalDeletedCountFlow()
     fun getFavoritesCountFlow(): Flow<Int> = dao.getFavoritesCountFlow()
@@ -74,7 +75,7 @@ class MediaRepository(
         return folders.mapNotNull { folderPath ->
             val filesInFolder = dao.getFilesInFolder(folderPath, type).filter {
                 val diskFile = File(it.path)
-                diskFile.exists() && diskFile.canRead()
+                diskFile.exists() || it.sizeBytes > 0L
             }
             if (filesInFolder.isNotEmpty()) {
                 val folderFile = File(folderPath)
