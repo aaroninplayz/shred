@@ -46,8 +46,8 @@ class BlockPhysicsState(
     var velocityX by mutableFloatStateOf(0f)
     var velocityY by mutableFloatStateOf(0f)
     var isDragging by mutableStateOf(false)
-    var width by mutableFloatStateOf(220f)
-    var height by mutableFloatStateOf(160f)
+    var width by mutableFloatStateOf(115f)
+    var height by mutableFloatStateOf(110f)
     var lastDragTimestamp by mutableLongStateOf(0L)
     var lastDragDelta by mutableStateOf(Offset.Zero)
     var isInitialized by mutableStateOf(false)
@@ -125,12 +125,12 @@ fun FloatingCategoryPlayground(
                 photoState.isInitialized = true
             }
             if (!videoState.isInitialized) {
-                videoState.posX = containerWidth * 0.36f
+                videoState.posX = containerWidth * 0.38f
                 videoState.posY = containerHeight * 0.22f
                 videoState.isInitialized = true
             }
             if (!audioState.isInitialized) {
-                audioState.posX = containerWidth * 0.10f
+                audioState.posX = containerWidth * 0.12f
                 audioState.posY = containerHeight * 0.42f
                 audioState.isInitialized = true
             }
@@ -306,11 +306,6 @@ fun FloatingCategoryPlayground(
         onHoverShredderStateChanged(isAnyHovered)
     }
 
-    val photoBytes = photoSizeBytes.toFloat()
-    val videoBytes = videoSizeBytes.toFloat()
-    val audioBytes = audioSizeBytes.toFloat()
-    val avgBytes = (photoBytes + videoBytes + audioBytes) / 3f
-
     Box(modifier = modifier.fillMaxSize()) {
         blocks.forEach { b ->
             val count = when (b.mediaType) {
@@ -323,11 +318,6 @@ fun FloatingCategoryPlayground(
                 MediaType.VIDEO -> videoSizeFormatted
                 MediaType.AUDIO -> audioSizeFormatted
             }
-            val catBytes = when (b.mediaType) {
-                MediaType.PHOTO -> photoBytes
-                MediaType.VIDEO -> videoBytes
-                MediaType.AUDIO -> audioBytes
-            }
 
             val title = when (b.mediaType) {
                 MediaType.PHOTO -> "PHOTOS"
@@ -339,9 +329,6 @@ fun FloatingCategoryPlayground(
                 MediaType.VIDEO -> "🎥"
                 MediaType.AUDIO -> "🎧"
             }
-
-            val isSinking = catBytes > avgBytes + 1024f
-            val isFloating = catBytes < avgBytes - 1024f
 
             val isOverShredder = remember(b, shredderThresholdY) {
                 derivedStateOf {
@@ -399,13 +386,10 @@ fun FloatingCategoryPlayground(
                     }
             ) {
                 HotAirBalloonCategory(
-                    mediaType = b.mediaType,
                     title = title,
                     emoji = emoji,
                     count = count,
                     sizeFormatted = sizeFormatted,
-                    isSinking = isSinking,
-                    isFloating = isFloating,
                     isDragging = b.isDragging,
                     isOverShredder = isOverShredder
                 )
@@ -416,160 +400,137 @@ fun FloatingCategoryPlayground(
 
 @Composable
 private fun HotAirBalloonCategory(
-    mediaType: MediaType,
     title: String,
     emoji: String,
     count: Int,
     sizeFormatted: String,
-    isSinking: Boolean,
-    isFloating: Boolean,
     isDragging: Boolean,
     isOverShredder: Boolean
 ) {
     val colors = LocalShredColors.current
+    val strokeColor = if (isOverShredder) colors.accent else if (isDragging) colors.textPrimary else colors.border
+    val fillColor = if (isOverShredder) colors.accent.copy(alpha = 0.25f) else colors.cardBackground
+    val ropeColor = if (colors.isGlass) colors.accent else colors.textSecondary
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.width(IntrinsicSize.Max)
     ) {
-        // 1. Hot Air Balloon Envelope (Dome)
+        // 1. Teardrop Hot Air Balloon Envelope (Dome + Stripes + Emoji)
         Box(
             modifier = Modifier
-                .width(220.dp)
-                .height(115.dp)
-                .then(
-                    if (colors.isGlass) {
-                        Modifier
-                            .shadow(16.dp, RoundedCornerShape(topStart = 60.dp, topEnd = 60.dp, bottomStart = 24.dp, bottomEnd = 24.dp), ambientColor = colors.accent, spotColor = colors.accent)
-                            .background(
-                                colors.cardBackground,
-                                shape = RoundedCornerShape(topStart = 60.dp, topEnd = 60.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                            )
-                            .border(
-                                width = 1.5.dp,
-                                color = if (isOverShredder) colors.accent else if (isDragging) colors.textPrimary else colors.border,
-                                shape = RoundedCornerShape(topStart = 60.dp, topEnd = 60.dp, bottomStart = 24.dp, bottomEnd = 24.dp)
-                            )
-                    } else if (colors.cardCornerRadius > 0.dp) {
-                        // Minimalism
-                        Modifier
-                            .shadow(8.dp, RoundedCornerShape(topStart = 50.dp, topEnd = 50.dp, bottomStart = 20.dp, bottomEnd = 20.dp))
-                            .background(
-                                colors.surface,
-                                shape = RoundedCornerShape(topStart = 50.dp, topEnd = 50.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = if (isOverShredder) colors.accent else if (isDragging) colors.textPrimary else colors.borderSubtle,
-                                shape = RoundedCornerShape(topStart = 50.dp, topEnd = 50.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
-                            )
-                    } else {
-                        // Brutalism
-                        Modifier
-                            .background(
-                                if (isOverShredder) colors.accent.copy(alpha = 0.2f) else colors.cardBackground,
-                                shape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
-                            )
-                            .border(
-                                width = 3.dp,
-                                color = if (isOverShredder) colors.accent else colors.border,
-                                shape = RoundedCornerShape(topStart = 40.dp, topEnd = 40.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
-                            )
-                    }
-                )
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .width(115.dp)
+                .height(85.dp),
             contentAlignment = Alignment.Center
         ) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(emoji, fontSize = 16.sp)
-                    Text(
-                        text = if (colors.cardCornerRadius == 0.dp) "[ $title ]" else title,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 13.sp,
-                        letterSpacing = 1.sp,
-                        color = colors.textPrimary
-                    )
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val w = size.width
+                val h = size.height
+
+                // Draw Teardrop Hot Air Balloon Envelope Path
+                val path = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.5f, h * 0.95f) // Neck bottom center
+                    cubicTo(w * 0.15f, h * 0.90f, 0f, h * 0.55f, 0f, h * 0.38f) // Left taper & curve
+                    cubicTo(0f, h * 0.10f, w * 0.22f, 0f, w * 0.5f, 0f) // Top left dome curve
+                    cubicTo(w * 0.78f, 0f, w, h * 0.10f, w, h * 0.38f) // Top right dome curve
+                    cubicTo(w, h * 0.55f, w * 0.85f, h * 0.90f, w * 0.5f, h * 0.95f) // Right taper to neck
+                    close()
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                // Fill balloon envelope background
+                drawPath(path = path, color = fillColor)
 
-                // Buoyancy Status Indicator Badge
-                val buoyancyBadge = when {
-                    isOverShredder -> "RELEASE TO SHRED! ⚡"
-                    isDragging -> "▼ THROW DOWN TO SHRED"
-                    isSinking -> "HEAVY • SINKS ⚓"
-                    isFloating -> "LIGHT • FLOATS 🎈"
-                    else -> "NEUTRAL BUOYANCY ⚖️"
+                // Draw 3D vertical stripe gores
+                val stripePath1 = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.5f, 0f)
+                    cubicTo(w * 0.3f, h * 0.3f, w * 0.35f, h * 0.7f, w * 0.5f, h * 0.95f)
+                }
+                val stripePath2 = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(w * 0.5f, 0f)
+                    cubicTo(w * 0.7f, h * 0.3f, w * 0.65f, h * 0.7f, w * 0.5f, h * 0.95f)
                 }
 
-                val buoyancyColor = when {
-                    isOverShredder -> colors.accent
-                    isSinking -> Color(0xFFFF5252)
-                    isFloating -> Color(0xFF69F0AE)
-                    else -> colors.textSecondary
-                }
+                drawPath(path = stripePath1, color = strokeColor.copy(alpha = 0.4f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+                drawPath(path = stripePath2, color = strokeColor.copy(alpha = 0.4f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
 
-                Text(
-                    text = buoyancyBadge,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 9.sp,
-                    color = buoyancyColor
+                // Draw Envelope Outline
+                drawPath(
+                    path = path,
+                    color = strokeColor,
+                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = colors.borderWidth.toPx())
                 )
             }
+
+            // Category Emoji centered inside balloon envelope
+            Text(
+                text = emoji,
+                fontSize = 24.sp,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
         }
 
-        // 2. Suspension Ropes & Burner Glow
-        val ropeColor = if (colors.isGlass) colors.accent else colors.textSecondary
+        // 2. Suspension Ropes
         Canvas(
             modifier = Modifier
-                .width(180.dp)
-                .height(16.dp)
+                .width(50.dp)
+                .height(10.dp)
         ) {
             val w = size.width
             val h = size.height
-            // Draw left and right ropes connecting balloon envelope to payload basket
-            drawLine(color = ropeColor, start = Offset(w * 0.25f, 0f), end = Offset(w * 0.35f, h), strokeWidth = 2f)
-            drawLine(color = ropeColor, start = Offset(w * 0.75f, 0f), end = Offset(w * 0.65f, h), strokeWidth = 2f)
+            drawLine(color = ropeColor, start = Offset(w * 0.2f, 0f), end = Offset(w * 0.1f, h), strokeWidth = 2f)
+            drawLine(color = ropeColor, start = Offset(w * 0.8f, 0f), end = Offset(w * 0.9f, h), strokeWidth = 2f)
         }
 
-        // 3. Payload Basket
+        // 3. Carriage Payload Basket (Contains ONLY Category Name, File Count & Storage Size)
         Box(
             modifier = Modifier
-                .width(200.dp)
+                .width(115.dp)
                 .then(
                     if (colors.isGlass) {
                         Modifier
-                            .background(colors.surface, shape = RoundedCornerShape(12.dp))
-                            .border(1.dp, colors.borderSubtle, shape = RoundedCornerShape(12.dp))
+                            .background(colors.surface, shape = RoundedCornerShape(8.dp))
+                            .border(1.dp, colors.borderSubtle, shape = RoundedCornerShape(8.dp))
                     } else if (colors.cardCornerRadius > 0.dp) {
                         Modifier
-                            .background(colors.cardBackground, shape = RoundedCornerShape(10.dp))
-                            .border(1.dp, colors.borderSubtle, shape = RoundedCornerShape(10.dp))
+                            .background(colors.cardBackground, shape = RoundedCornerShape(8.dp))
+                            .border(1.dp, colors.borderSubtle, shape = RoundedCornerShape(8.dp))
                     } else {
                         Modifier
                             .background(colors.surface, shape = RoundedCornerShape(0.dp))
                             .border(2.dp, colors.border, shape = RoundedCornerShape(0.dp))
                     }
                 )
-                .padding(horizontal = 10.dp, vertical = 6.dp),
+                .padding(horizontal = 6.dp, vertical = 5.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "$count FILES • $sizeFormatted",
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 10.sp,
-                color = colors.textSecondary
-            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = title,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 11.sp,
+                    letterSpacing = 0.5.sp,
+                    color = colors.textPrimary
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = "$count FILES",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp,
+                    color = colors.textSecondary
+                )
+                Text(
+                    text = sizeFormatted,
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 9.sp,
+                    color = colors.accent
+                )
+            }
         }
     }
 }
