@@ -416,42 +416,57 @@ private fun HotAirBalloonCategory(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.width(IntrinsicSize.Max)
     ) {
-        // 1. Teardrop Hot Air Balloon Envelope (Dome + Stripes + Emoji)
+        // 1. Hot Air Balloon Envelope (Round Top Sphere + Tapered Neck matching reference silhouette)
         Box(
             modifier = Modifier
-                .width(115.dp)
-                .height(85.dp),
+                .width(110.dp)
+                .height(115.dp),
             contentAlignment = Alignment.Center
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val w = size.width
                 val h = size.height
 
-                // Draw Teardrop Hot Air Balloon Envelope Path
+                val cx = w / 2f
+                val domeRadius = w * 0.44f
+                val cy = domeRadius + 4f
+                val neckW = w * 0.24f
+                val neckY = h - 2f
+
+                // Draw Hot Air Balloon Silhouette Path
                 val path = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(w * 0.5f, h * 0.95f) // Neck bottom center
-                    cubicTo(w * 0.15f, h * 0.90f, 0f, h * 0.55f, 0f, h * 0.38f) // Left taper & curve
-                    cubicTo(0f, h * 0.10f, w * 0.22f, 0f, w * 0.5f, 0f) // Top left dome curve
-                    cubicTo(w * 0.78f, 0f, w, h * 0.10f, w, h * 0.38f) // Top right dome curve
-                    cubicTo(w, h * 0.55f, w * 0.85f, h * 0.90f, w * 0.5f, h * 0.95f) // Right taper to neck
+                    moveTo(cx - neckW / 2f, neckY)
+                    lineTo(cx - domeRadius, cy + domeRadius * 0.35f)
+                    cubicTo(
+                        cx - domeRadius, cy - domeRadius * 0.82f,
+                        cx - domeRadius * 0.55f, cy - domeRadius,
+                        cx, cy - domeRadius
+                    )
+                    cubicTo(
+                        cx + domeRadius * 0.55f, cy - domeRadius,
+                        cx + domeRadius, cy - domeRadius * 0.82f,
+                        cx + domeRadius, cy + domeRadius * 0.35f
+                    )
+                    lineTo(cx + neckW / 2f, neckY)
+                    lineTo(cx - neckW / 2f, neckY)
                     close()
                 }
 
-                // Fill balloon envelope background
+                // Fill balloon envelope
                 drawPath(path = path, color = fillColor)
 
-                // Draw 3D vertical stripe gores
-                val stripePath1 = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(w * 0.5f, 0f)
-                    cubicTo(w * 0.3f, h * 0.3f, w * 0.35f, h * 0.7f, w * 0.5f, h * 0.95f)
+                // Draw vertical stripe gores
+                val stripe1 = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(cx, cy - domeRadius)
+                    cubicTo(cx - domeRadius * 0.45f, cy, cx - domeRadius * 0.2f, cy + domeRadius * 0.8f, cx - neckW * 0.3f, neckY)
                 }
-                val stripePath2 = androidx.compose.ui.graphics.Path().apply {
-                    moveTo(w * 0.5f, 0f)
-                    cubicTo(w * 0.7f, h * 0.3f, w * 0.65f, h * 0.7f, w * 0.5f, h * 0.95f)
+                val stripe2 = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(cx, cy - domeRadius)
+                    cubicTo(cx + domeRadius * 0.45f, cy, cx + domeRadius * 0.2f, cy + domeRadius * 0.8f, cx + neckW * 0.3f, neckY)
                 }
 
-                drawPath(path = stripePath1, color = strokeColor.copy(alpha = 0.4f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
-                drawPath(path = stripePath2, color = strokeColor.copy(alpha = 0.4f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+                drawPath(path = stripe1, color = strokeColor.copy(alpha = 0.35f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
+                drawPath(path = stripe2, color = strokeColor.copy(alpha = 0.35f), style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.5f))
 
                 // Draw Envelope Outline
                 drawPath(
@@ -461,27 +476,27 @@ private fun HotAirBalloonCategory(
                 )
             }
 
-            // Category Emoji centered inside balloon envelope
+            // Category Emoji inside top dome
             Text(
                 text = emoji,
                 fontSize = 24.sp,
-                modifier = Modifier.padding(bottom = 6.dp)
+                modifier = Modifier.padding(bottom = 20.dp)
             )
         }
 
         // 2. Suspension Ropes
         Canvas(
             modifier = Modifier
-                .width(50.dp)
-                .height(10.dp)
+                .width(36.dp)
+                .height(8.dp)
         ) {
             val w = size.width
             val h = size.height
-            drawLine(color = ropeColor, start = Offset(w * 0.2f, 0f), end = Offset(w * 0.1f, h), strokeWidth = 2f)
-            drawLine(color = ropeColor, start = Offset(w * 0.8f, 0f), end = Offset(w * 0.9f, h), strokeWidth = 2f)
+            drawLine(color = ropeColor, start = Offset(w * 0.15f, 0f), end = Offset(w * 0.05f, h), strokeWidth = 2f)
+            drawLine(color = ropeColor, start = Offset(w * 0.85f, 0f), end = Offset(w * 0.95f, h), strokeWidth = 2f)
         }
 
-        // 3. Carriage Payload Basket (Contains ONLY Category Name, File Count & Storage Size)
+        // 3. Payload Basket (Clean & Compact)
         Box(
             modifier = Modifier
                 .width(115.dp)
@@ -500,7 +515,7 @@ private fun HotAirBalloonCategory(
                             .border(2.dp, colors.border, shape = RoundedCornerShape(0.dp))
                     }
                 )
-                .padding(horizontal = 6.dp, vertical = 5.dp),
+                .padding(horizontal = 6.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -517,21 +532,15 @@ private fun HotAirBalloonCategory(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = "$count FILES",
+                    text = "$count FILES • $sizeFormatted",
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold,
                     fontSize = 9.sp,
                     color = colors.textSecondary
                 )
-                Text(
-                    text = sizeFormatted,
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 9.sp,
-                    color = colors.accent
-                )
             }
         }
     }
 }
+
 
