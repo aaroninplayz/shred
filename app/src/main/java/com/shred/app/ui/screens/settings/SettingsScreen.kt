@@ -14,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -369,35 +370,64 @@ private fun SettingThemeSelector(current: ThemeMode, onSelected: (ThemeMode) -> 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.5.dp, colors.borderSubtle)
-            .background(colors.surface)
+            .border(colors.borderWidth, colors.borderSubtle, shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius))
+            .background(colors.surface, shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius))
             .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("THEME FLAVOR", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+        Text("THEME SYSTEM ///", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp, color = colors.accent)
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ThemeMode.values().forEach { mode ->
                 val isSelected = current == mode
+                val icon = when (mode) {
+                    ThemeMode.BRUTALISM -> "⬛"
+                    ThemeMode.MINIMALISM -> "▫️"
+                    ThemeMode.GLASSMORPHISM -> "✨"
+                }
+                val label = when (mode) {
+                    ThemeMode.BRUTALISM -> "BRUTALISM"
+                    ThemeMode.MINIMALISM -> "MINIMALISM"
+                    ThemeMode.GLASSMORPHISM -> "GLASSMORPHISM"
+                }
+
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle)
-                        .background(if (isSelected) colors.cardBackground else colors.surface)
+                        .graphicsLayer {
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(if (mode == ThemeMode.GLASSMORPHISM) 12.dp else if (mode == ThemeMode.MINIMALISM) 8.dp else 0.dp)
+                            clip = true
+                        }
+                        .border(
+                            width = if (isSelected) 2.dp else 1.dp,
+                            color = if (isSelected) colors.accent else colors.borderSubtle,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(if (mode == ThemeMode.GLASSMORPHISM) 12.dp else if (mode == ThemeMode.MINIMALISM) 8.dp else 0.dp)
+                        )
+                        .background(
+                            if (isSelected) colors.cardBackground else colors.surface,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(if (mode == ThemeMode.GLASSMORPHISM) 12.dp else if (mode == ThemeMode.MINIMALISM) 8.dp else 0.dp)
+                        )
                         .clickable { onSelected(mode) }
-                        .padding(vertical = 8.dp),
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = mode.name.replace("_", "\n"),
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = if (isSelected) FontWeight.Black else FontWeight.Normal,
-                        fontSize = 10.sp,
-                        color = if (isSelected) colors.accent else colors.textSecondary,
-                        lineHeight = 12.sp
-                    )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(icon, fontSize = 16.sp)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = label,
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                            fontSize = 9.sp,
+                            color = if (isSelected) colors.accent else colors.textSecondary,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }

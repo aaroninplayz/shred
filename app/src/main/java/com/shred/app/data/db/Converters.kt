@@ -21,7 +21,7 @@ class Converters {
     fun toThemeMode(value: String): ThemeMode = try {
         ThemeMode.valueOf(value)
     } catch (e: Exception) {
-        ThemeMode.MONOCHROME
+        ThemeMode.BRUTALISM
     }
 
     @TypeConverter

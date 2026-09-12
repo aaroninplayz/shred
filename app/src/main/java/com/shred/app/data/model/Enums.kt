@@ -13,9 +13,9 @@ enum class ActionType {
 }
 
 enum class ThemeMode {
-    MONOCHROME,
-    NEON,
-    NEO_BRUTALISM
+    BRUTALISM,
+    MINIMALISM,
+    GLASSMORPHISM
 }
 
 enum class SortOrder {

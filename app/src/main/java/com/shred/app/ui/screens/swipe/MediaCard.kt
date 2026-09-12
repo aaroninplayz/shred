@@ -78,11 +78,15 @@ fun MediaCard(
                 this.rotationZ = rotationZ
                 this.rotationX = flipProgress.value
                 cameraDistance = 18f * density
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
+                clip = true
             }
             .border(
-                width = if (isZoomMode) 0.dp else 3.dp,
-                color = if (isZoomMode) Color.Transparent else colors.border
+                width = if (isZoomMode) 0.dp else colors.borderWidth,
+                color = if (isZoomMode) Color.Transparent else colors.border,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
             )
+            .background(colors.cardBackground, shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius))
             .pointerInput(file.id, isTopCard, isFlipped, isZoomMode) {
                 if (!isTopCard) return@pointerInput
 

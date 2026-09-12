@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
 data class AppSettings(
     @PrimaryKey
     val id: Int = 1,
-    val themeMode: ThemeMode = ThemeMode.MONOCHROME,
+    val themeMode: ThemeMode = ThemeMode.BRUTALISM,
     val sortOrder: SortOrder = SortOrder.OLDEST_FIRST,
     val progressBarStyle: ProgressBarStyle = ProgressBarStyle.MINIMAL_COUNTER,
     val trashRetentionHours: Int = 24 * 7, // 7 days default (1 to 1440 hours / 60 days)

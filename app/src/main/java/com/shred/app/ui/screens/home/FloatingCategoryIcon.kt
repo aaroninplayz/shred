@@ -312,13 +312,22 @@ fun FloatingCategoryPlayground(
                     .graphicsLayer {
                         translationX = b.posX
                         translationY = b.posY
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
+                        clip = true
                     }
                     .onGloballyPositioned { coords ->
                         b.width = coords.size.width.toFloat()
                         b.height = coords.size.height.toFloat()
                     }
-                    .border(2.5.dp, if (isOverShredder) colors.accent else if (b.isDragging) colors.textPrimary else colors.border)
-                    .background(if (isOverShredder) colors.accent.copy(alpha = 0.15f) else if (b.isDragging) colors.surface else colors.cardBackground)
+                    .border(
+                        width = colors.borderWidth,
+                        color = if (isOverShredder) colors.accent else if (b.isDragging) colors.textPrimary else colors.border,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
+                    )
+                    .background(
+                        if (isOverShredder) colors.accent.copy(alpha = 0.15f) else if (b.isDragging) colors.surface else colors.cardBackground,
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
+                    )
                     .clickable { onThrownIntoShredder(b.mediaType) }
                     .pointerInput(b.mediaType, containerWidth, containerHeight, shredderThresholdY) {
                         detectDragGestures(

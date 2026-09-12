@@ -77,8 +77,14 @@ fun FolderHeaderCard(
             .graphicsLayer {
                 transformOrigin = TransformOrigin.Center
                 this.rotationZ = rotationZ
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
+                clip = true
             }
-            .border(3.dp, colors.border)
+            .border(
+                width = colors.borderWidth,
+                color = colors.border,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
+            )
             .pointerInput(folderGroup.folderPath) {
                 detectTapGestures(
                     onTap = { onExpandClick() },
