@@ -10,7 +10,13 @@ import com.shred.app.util.HapticFeedbackHelper
 import com.shred.app.util.SoundEffectHelper
 import com.shred.app.util.TrashManager
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+
 class ShredApplication : Application() {
+
+    val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     lateinit var database: AppDatabase
         private set
@@ -45,6 +51,14 @@ class ShredApplication : Application() {
         soundHelper = SoundEffectHelper()
 
         // Schedule periodic background trash cleanup
-        TrashCleanerWorker.schedulePeriodic(this)
+        try {
+            TrashCleanerWorker.schedulePeriodic(this)
+        } catch (e: Exception) {
+            android.util.Log.e("ShredApplication", "Could not schedule TrashCleanerWorker", e)
+        }
+    }
+
+    fun triggerBackgroundScan() {
+        scanner.startBackgroundScan(applicationScope, settingsRepository)
     }
 }

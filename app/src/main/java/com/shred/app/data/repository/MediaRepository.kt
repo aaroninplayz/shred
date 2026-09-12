@@ -9,10 +9,31 @@ class MediaRepository(
     private val dao: MediaFileDao
 ) {
     fun getActiveQueueFlow(type: MediaType): Flow<List<MediaFile>> = dao.getActiveQueueFlow(type)
-    suspend fun getActiveQueue(type: MediaType): List<MediaFile> = dao.getActiveQueue(type)
+
+    suspend fun getActiveQueue(type: MediaType): List<MediaFile> {
+        val rawQueue = dao.getActiveQueue(type)
+        val validQueue = mutableListOf<MediaFile>()
+        val missingIds = mutableListOf<Long>()
+
+        for (file in rawQueue) {
+            val diskFile = File(file.path)
+            if (diskFile.exists() && diskFile.canRead() && diskFile.length() > 0L) {
+                validQueue.add(file)
+            } else {
+                missingIds.add(file.id)
+            }
+        }
+
+        if (missingIds.isNotEmpty()) {
+            missingIds.forEach { dao.deletePermanently(it) }
+        }
+
+        return validQueue
+    }
 
     fun getFavoritesFlow(): Flow<List<MediaFile>> = dao.getFavoritesFlow()
     suspend fun getFavorites(): List<MediaFile> = dao.getFavorites()
+    suspend fun getById(id: Long): MediaFile? = dao.getById(id)
 
     fun getActiveCountFlow(type: MediaType): Flow<Int> = dao.getActiveCountFlow(type)
     fun getTotalCountFlow(type: MediaType): Flow<Int> = dao.getTotalCountFlow(type)
@@ -51,12 +72,15 @@ class MediaRepository(
     suspend fun getFolderGroups(type: MediaType): List<FolderGroup> {
         val folders = dao.getDistinctFolders(type)
         return folders.mapNotNull { folderPath ->
-            val filesInFolder = dao.getFilesInFolder(folderPath, type)
+            val filesInFolder = dao.getFilesInFolder(folderPath, type).filter {
+                val diskFile = File(it.path)
+                diskFile.exists() && diskFile.canRead()
+            }
             if (filesInFolder.isNotEmpty()) {
                 val folderFile = File(folderPath)
                 FolderGroup(
                     folderPath = folderPath,
-                    folderName = folderFile.name.ifEmpty { "Root" },
+                    folderName = folderFile.name.ifEmpty { "Storage" },
                     mediaType = type,
                     fileCount = filesInFolder.size,
                     totalSizeBytes = filesInFolder.sumOf { it.sizeBytes },

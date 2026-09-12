@@ -51,6 +51,12 @@ data class FolderGroup(
 data class ScanProgress(
     val scannedCount: Int = 0,
     val discoveredMediaCount: Int = 0,
+    val discoveredPhotosCount: Int = 0,
+    val discoveredVideosCount: Int = 0,
+    val discoveredAudioCount: Int = 0,
+    val discoveredPhotosSize: Long = 0L,
+    val discoveredVideosSize: Long = 0L,
+    val discoveredAudioSize: Long = 0L,
     val currentPath: String = "",
     val isComplete: Boolean = false
 )

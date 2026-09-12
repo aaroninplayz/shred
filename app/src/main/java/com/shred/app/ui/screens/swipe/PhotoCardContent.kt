@@ -39,13 +39,29 @@ fun PhotoCardContent(
             isZoomMode = isZoomMode,
             modifier = Modifier.fillMaxSize()
         ) {
-            AsyncImage(
+            coil.compose.SubcomposeAsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(File(file.path))
                     .crossfade(true)
                     .build(),
                 contentDescription = file.fileName,
                 contentScale = ContentScale.Fit,
+                error = {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(colors.cardBackground),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "[ FILE UNREADABLE / MOVED ]\n${file.fileName}",
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 11.sp,
+                            color = colors.accent
+                        )
+                    }
+                },
                 modifier = Modifier.fillMaxSize()
             )
         }

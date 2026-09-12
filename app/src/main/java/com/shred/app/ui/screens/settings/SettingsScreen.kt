@@ -258,90 +258,8 @@ fun SettingsScreen(
                     )
                 }
 
-                // Section 6: Loading Screen Customization
-                SettingsSectionHeader("06. CINEMATIC LOADING")
-
-                SettingLoadingAnimationSelector(
-                    current = settings.loadingAnimation,
-                    onSelected = { viewModel.updateSettings(settings.copy(loadingAnimation = it)) }
-                )
-
-                SettingTransitionSelector(
-                    current = settings.transitionStyle,
-                    onSelected = { viewModel.updateSettings(settings.copy(transitionStyle = it)) }
-                )
-
-                // Custom phrases pool
-                Text(
-                    text = "CUSTOM LOADING PHRASES POOL:",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    color = colors.textSecondary
-                )
-
-                val phrases = viewModel.getLoadingPhrasesList()
-                phrases.forEachIndexed { index, phrase ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .border(1.dp, colors.borderSubtle)
-                            .background(colors.surface)
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = phrase,
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = 11.sp,
-                            color = colors.textPrimary,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { viewModel.removeLoadingPhrase(index) }) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete phrase",
-                                tint = Color(0xFFFF3B30),
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    OutlinedTextField(
-                        value = newPhraseText,
-                        onValueChange = { newPhraseText = it },
-                        placeholder = { Text("NEW PHRASE...", fontFamily = FontFamily.Monospace, fontSize = 11.sp) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true
-                    )
-                    Box(
-                        modifier = Modifier
-                            .border(2.dp, colors.accent)
-                            .clickable {
-                                viewModel.addLoadingPhrase(newPhraseText)
-                                newPhraseText = ""
-                            }
-                            .padding(horizontal = 12.dp, vertical = 14.dp)
-                    ) {
-                        Text(
-                            text = "+ ADD",
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 11.sp,
-                            color = colors.accent
-                        )
-                    }
-                }
-
-                // Section 7: Session Actions
-                SettingsSectionHeader("07. SESSION RESET")
+                // Section 06: Session Actions
+                SettingsSectionHeader("06. SESSION RESET")
 
                 Box(
                     modifier = Modifier
@@ -546,43 +464,7 @@ private fun SettingProgressBarStyleSelector(current: ProgressBarStyle, onSelecte
     }
 }
 
-@Composable
-private fun SettingLoadingAnimationSelector(current: LoadingAnimation, onSelected: (LoadingAnimation) -> Unit) {
-    val colors = LocalShredColors.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.5.dp, colors.borderSubtle)
-            .background(colors.surface)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text("LOADING TEXT ANIMATION", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            LoadingAnimation.values().forEach { anim ->
-                val isSelected = current == anim
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle)
-                        .clickable { onSelected(anim) }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = anim.name,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 10.sp,
-                        color = if (isSelected) colors.accent else colors.textSecondary
-                    )
-                }
-            }
-        }
-    }
-}
+
 
 @Composable
 private fun SettingTransitionSelector(current: TransitionStyle, onSelected: (TransitionStyle) -> Unit) {

@@ -14,8 +14,6 @@ import com.shred.app.ui.screens.favorites.FavoritesScreen
 import com.shred.app.ui.screens.favorites.FavoritesViewModel
 import com.shred.app.ui.screens.home.HomeScreen
 import com.shred.app.ui.screens.home.HomeViewModel
-import com.shred.app.ui.screens.loading.LoadingScreen
-import com.shred.app.ui.screens.loading.LoadingViewModel
 import com.shred.app.ui.screens.settings.SettingsScreen
 import com.shred.app.ui.screens.settings.SettingsViewModel
 import com.shred.app.ui.screens.swipe.SwipeScreen
@@ -28,43 +26,33 @@ fun ShredNavGraph(
 ) {
     NavHost(
         navController = navController,
-        startDestination = Screen.Loading.route,
+        startDestination = Screen.Home.route,
         enterTransition = { fadeIn(tween(250)) },
         exitTransition = { fadeOut(tween(250)) }
     ) {
-        // 1. Cinematic Loading Screen
-        composable(Screen.Loading.route) {
-            val viewModel = LoadingViewModel(
-                scanner = app.scanner,
-                settingsRepository = app.settingsRepository,
-                mediaRepository = app.mediaRepository
-            )
-            LoadingScreen(
-                viewModel = viewModel,
-                onNavigateToHome = {
-                    navController.navigate(Screen.Home.route) {
-                        popUpTo(Screen.Loading.route) { inclusive = true }
-                    }
-                }
-            )
-        }
-
-        // 2. Shredder Machine Home Screen
+        // 1. Shredder Machine Home Screen
         composable(Screen.Home.route) {
             val viewModel = HomeViewModel(
                 mediaRepository = app.mediaRepository,
-                settingsRepository = app.settingsRepository
+                settingsRepository = app.settingsRepository,
+                scanner = app.scanner
             )
             HomeScreen(
                 viewModel = viewModel,
                 onNavigateToSwipe = { mediaType ->
-                    navController.navigate(Screen.Swipe.createRoute(mediaType))
+                    navController.navigate(Screen.Swipe.createRoute(mediaType)) {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateToFavorites = {
-                    navController.navigate(Screen.Favorites.route)
+                    navController.navigate(Screen.Favorites.route) {
+                        launchSingleTop = true
+                    }
                 },
                 onNavigateToSettings = {
-                    navController.navigate(Screen.Settings.route)
+                    navController.navigate(Screen.Settings.route) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }

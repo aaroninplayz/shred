@@ -8,6 +8,9 @@ import com.shred.app.data.repository.MediaRepository
 import com.shred.app.data.repository.SettingsRepository
 import kotlinx.coroutines.flow.*
 
+import com.shred.app.scanner.MediaScanner
+import kotlinx.coroutines.flow.*
+
 data class HomeUiState(
     val photoCount: Int = 0,
     val photoSize: Long = 0,
@@ -17,6 +20,8 @@ data class HomeUiState(
     val audioSize: Long = 0,
     val totalDeletedSize: Long = 0,
     val favoritesCount: Int = 0,
+    val isScanning: Boolean = false,
+    val scannedCount: Int = 0,
     val settings: AppSettings = AppSettings()
 )
 
@@ -27,7 +32,8 @@ data class CategoryStats(
 
 class HomeViewModel(
     private val mediaRepository: MediaRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val scanner: MediaScanner
 ) : ViewModel() {
 
     private val photoStats = combine(
@@ -51,22 +57,42 @@ class HomeViewModel(
         settingsRepository.getSettingsFlow()
     ) { delSize, favCount, settings -> Triple(delSize, favCount, settings) }
 
+    private val scanState = combine(
+        scanner.isScanning,
+        scanner.scanProgress
+    ) { isScanning, progress -> Pair(isScanning, progress) }
+
     val uiState: StateFlow<HomeUiState> = combine(
         photoStats,
         videoStats,
         audioStats,
-        globalStats
-    ) { p, v, a, g ->
+        globalStats,
+        scanState
+    ) { p, v, a, g, s ->
+        val isScanning = s.first
+        val progress = s.second
+
+        val livePhotoCount = if (isScanning && progress != null) maxOf(p.count, progress.discoveredPhotosCount) else p.count
+        val livePhotoSize = if (isScanning && progress != null) maxOf(p.size, progress.discoveredPhotosSize) else p.size
+
+        val liveVideoCount = if (isScanning && progress != null) maxOf(v.count, progress.discoveredVideosCount) else v.count
+        val liveVideoSize = if (isScanning && progress != null) maxOf(v.size, progress.discoveredVideosSize) else v.size
+
+        val liveAudioCount = if (isScanning && progress != null) maxOf(a.count, progress.discoveredAudioCount) else a.count
+        val liveAudioSize = if (isScanning && progress != null) maxOf(a.size, progress.discoveredAudioSize) else a.size
+
         HomeUiState(
-            photoCount = p.count,
-            photoSize = p.size,
-            videoCount = v.count,
-            videoSize = v.size,
-            audioCount = a.count,
-            audioSize = a.size,
+            photoCount = livePhotoCount,
+            photoSize = livePhotoSize,
+            videoCount = liveVideoCount,
+            videoSize = liveVideoSize,
+            audioCount = liveAudioCount,
+            audioSize = liveAudioSize,
             totalDeletedSize = g.first,
             favoritesCount = g.second,
+            isScanning = isScanning,
+            scannedCount = progress?.scannedCount ?: 0,
             settings = g.third
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
+    }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
 }

@@ -1,6 +1,8 @@
 package com.shred.app.ui.screens.swipe
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -33,29 +35,37 @@ fun MediaCard(
     file: MediaFile,
     isTopCard: Boolean,
     onSwiped: (ActionType) -> Unit,
-    onDragDelta: (Float, Float) -> Unit,
+    onDragDelta: (Float, Float) -> Unit = { _, _ -> },
+    onFolderLongPress: (() -> Unit)? = null,
+    onZoomModeChanged: ((Boolean) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalShredColors.current
     val scope = rememberCoroutineScope()
 
-    val offsetX = remember { Animatable(0f) }
-    val offsetY = remember { Animatable(0f) }
-    val flipProgress = remember { Animatable(0f) } // 0f = front, 180f = back
+    val offsetX = remember(file.id) { Animatable(0f) }
+    val offsetY = remember(file.id) { Animatable(0f) }
+    val flipProgress = remember(file.id) { Animatable(0f) } // 0f = front, 180f = back
 
-    var isFlipped by remember { mutableStateOf(false) }
-    var isZoomMode by remember { mutableStateOf(false) }
+    var isFlipped by remember(file.id) { mutableStateOf(false) }
+    var isZoomMode by remember(file.id) { mutableStateOf(false) }
+
+    LaunchedEffect(isZoomMode) {
+        onZoomModeChanged?.invoke(isZoomMode)
+    }
 
     val rotationZ = if (isFlipped) 0f else (offsetX.value / 60f).coerceIn(-25f, 25f)
 
-    // Calculate color tint overlay based on drag offset
+    // Calculate color tint overlay based on drag offset with axis dominance check
     val dragX = offsetX.value
     val dragY = offsetY.value
+    val absDragX = abs(dragX)
+    val absDragY = abs(dragY)
 
     val tintColor = when {
-        dragX < -60f -> SwipeDeleteRed.copy(alpha = (abs(dragX) / 400f).coerceIn(0f, 0.5f))
-        dragX > 60f -> SwipeKeepGreen.copy(alpha = (abs(dragX) / 400f).coerceIn(0f, 0.5f))
-        dragY < -60f -> SwipeFavoriteGold.copy(alpha = (abs(dragY) / 400f).coerceIn(0f, 0.5f))
+        dragX < -60f && absDragX > absDragY * 1.2f -> SwipeDeleteRed.copy(alpha = (absDragX / 400f).coerceIn(0f, 0.5f))
+        dragX > 60f && absDragX > absDragY * 1.2f -> SwipeKeepGreen.copy(alpha = (absDragX / 400f).coerceIn(0f, 0.5f))
+        dragY < -60f && absDragY > absDragX * 1.2f -> SwipeFavoriteGold.copy(alpha = (absDragY / 400f).coerceIn(0f, 0.5f))
         else -> Color.Transparent
     }
 
@@ -64,71 +74,85 @@ fun MediaCard(
             .fillMaxSize()
             .offset { IntOffset(offsetX.value.roundToInt(), offsetY.value.roundToInt()) }
             .graphicsLayer {
-                transformOrigin = TransformOrigin(0.5f, 1.0f) // Pivot at bottom-center
+                transformOrigin = TransformOrigin.Center // Pivot in-place at exact center
                 this.rotationZ = rotationZ
                 this.rotationX = flipProgress.value
-                cameraDistance = 16f * density
+                cameraDistance = 18f * density
             }
-            .border(3.dp, colors.border)
-            .pointerInput(isTopCard, isFlipped, isZoomMode) {
+            .border(
+                width = if (isZoomMode) 0.dp else 3.dp,
+                color = if (isZoomMode) Color.Transparent else colors.border
+            )
+            .pointerInput(file.id, isTopCard, isFlipped, isZoomMode) {
                 if (!isTopCard) return@pointerInput
 
                 detectTapGestures(
                     onLongPress = {
-                        // Long press toggles zoom mode
                         if (!isFlipped && (file.mediaType == MediaType.PHOTO || file.mediaType == MediaType.VIDEO)) {
                             isZoomMode = !isZoomMode
+                        } else {
+                            onFolderLongPress?.invoke()
                         }
                     }
                 )
             }
-            .pointerInput(isTopCard, isFlipped, isZoomMode) {
+            .pointerInput(file.id, isTopCard, isFlipped, isZoomMode) {
                 if (!isTopCard || isZoomMode) return@pointerInput
 
                 detectDragGestures(
                     onDragEnd = {
                         val currentX = offsetX.value
                         val currentY = offsetY.value
-                        val thresholdX = 220f
-                        val thresholdY = 240f
+                        val absX = abs(currentX)
+                        val absY = abs(currentY)
+
+                        val isHorizontalAction = absX > absY * 1.25f
+                        val isVerticalAction = absY > absX * 1.25f
+
+                        val thresholdX = 180f
+                        val thresholdFavoriteY = 200f
+                        val thresholdFlipY = 140f
 
                         scope.launch {
                             if (isFlipped) {
                                 // In metadata view, swipe UP flips back
-                                if (currentY < -100f) {
-                                    flipProgress.animateTo(0f, tween(300))
+                                if ((isVerticalAction && currentY < -90f) || flipProgress.value < 90f) {
+                                    launch { flipProgress.animateTo(0f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) }
                                     isFlipped = false
+                                } else {
+                                    launch { flipProgress.animateTo(180f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) }
                                 }
-                                offsetX.animateTo(0f, tween(200))
-                                offsetY.animateTo(0f, tween(200))
+                                launch { offsetX.animateTo(0f, spring()) }
+                                launch { offsetY.animateTo(0f, spring()) }
                             } else {
                                 when {
-                                    currentX < -thresholdX -> {
+                                    isHorizontalAction && currentX < -thresholdX -> {
                                         // SWIPE LEFT -> DELETE
                                         offsetX.animateTo(-1200f, tween(220))
                                         onSwiped(ActionType.DELETE)
                                     }
-                                    currentX > thresholdX -> {
+                                    isHorizontalAction && currentX > thresholdX -> {
                                         // SWIPE RIGHT -> KEEP
                                         offsetX.animateTo(1200f, tween(220))
                                         onSwiped(ActionType.KEEP)
                                     }
-                                    currentY < -thresholdY -> {
+                                    isVerticalAction && currentY < -thresholdFavoriteY -> {
                                         // SWIPE UP -> FAVORITE
                                         offsetY.animateTo(-1400f, tween(220))
                                         onSwiped(ActionType.FAVORITE)
                                     }
-                                    currentY > 120f -> {
+                                    (isVerticalAction && currentY > thresholdFlipY) || flipProgress.value >= 90f -> {
                                         // SWIPE DOWN -> FLIP CARD TO METADATA
-                                        offsetY.animateTo(0f, tween(150))
-                                        offsetX.animateTo(0f, tween(150))
-                                        flipProgress.animateTo(180f, tween(350))
+                                        launch { flipProgress.animateTo(180f, spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow)) }
+                                        launch { offsetX.animateTo(0f, spring()) }
+                                        launch { offsetY.animateTo(0f, spring()) }
                                         isFlipped = true
                                     }
                                     else -> {
-                                        // Settle back to center
-                                        offsetX.animateTo(0f, tween(200))
-                                        offsetY.animateTo(0f, tween(200))
+                                        // Settle back to front
+                                        launch { flipProgress.animateTo(0f, spring()) }
+                                        launch { offsetX.animateTo(0f, spring()) }
+                                        launch { offsetY.animateTo(0f, spring()) }
                                     }
                                 }
                             }
@@ -136,8 +160,9 @@ fun MediaCard(
                     },
                     onDragCancel = {
                         scope.launch {
-                            offsetX.animateTo(0f, tween(200))
-                            offsetY.animateTo(0f, tween(200))
+                            launch { flipProgress.animateTo(if (isFlipped) 180f else 0f, spring()) }
+                            launch { offsetX.animateTo(0f, spring()) }
+                            launch { offsetY.animateTo(0f, spring()) }
                         }
                     },
                     onDrag = { change, dragAmount ->
@@ -147,8 +172,25 @@ fun MediaCard(
                                 offsetX.snapTo(offsetX.value + dragAmount.x)
                                 offsetY.snapTo(offsetY.value + dragAmount.y)
                                 onDragDelta(offsetX.value, offsetY.value)
+
+                                // Continuous 3D Flip Rotation tracking vertical drag down distance with axis dominance check
+                                val isVerticalDrag = abs(offsetY.value) > abs(offsetX.value) * 1.3f
+                                if (offsetY.value > 20f && isVerticalDrag) {
+                                    val continuousFlip = (offsetY.value / 160f * 180f).coerceIn(0f, 180f)
+                                    flipProgress.snapTo(continuousFlip)
+                                } else {
+                                    flipProgress.snapTo(0f)
+                                }
                             } else {
                                 offsetY.snapTo(offsetY.value + dragAmount.y)
+
+                                // Continuous 3D Flip Rotation tracking drag up distance back to 0
+                                if (offsetY.value < 0f) {
+                                    val continuousFlip = (180f + offsetY.value / 160f * 180f).coerceIn(0f, 180f)
+                                    flipProgress.snapTo(continuousFlip)
+                                } else {
+                                    flipProgress.snapTo(180f)
+                                }
                             }
                         }
                     }

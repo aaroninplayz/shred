@@ -25,6 +25,7 @@ import com.shred.app.ui.theme.LocalShredColors
 @Composable
 fun ShredderMachine(
     modifier: Modifier = Modifier,
+    isHovered: Boolean = false,
     onSettingsClick: () -> Unit
 ) {
     val colors = LocalShredColors.current
@@ -34,7 +35,7 @@ fun ShredderMachine(
         initialValue = 0f,
         targetValue = 24f,
         animationSpec = infiniteRepeatable(
-            animation = tween(800, easing = LinearEasing),
+            animation = tween(if (isHovered) 200 else 800, easing = LinearEasing),
             repeatMode = RepeatMode.Restart
         ),
         label = "bladeAnimation"
@@ -84,7 +85,7 @@ fun ShredderMachine(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(140.dp)
-                .border(3.dp, colors.border)
+                .border(3.dp, if (isHovered) colors.accent else colors.border)
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val w = size.width
@@ -92,7 +93,7 @@ fun ShredderMachine(
 
                 // Draw background dark metal
                 drawRect(
-                    color = colors.cardBackground,
+                    color = if (isHovered) colors.cardBackground.copy(alpha = 0.9f) else colors.cardBackground,
                     topLeft = Offset.Zero,
                     size = size
                 )

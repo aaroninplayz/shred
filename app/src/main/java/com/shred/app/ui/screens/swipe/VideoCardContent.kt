@@ -47,25 +47,43 @@ fun VideoCardContent(
     var durationMs by remember { mutableLongStateOf(0L) }
 
     val exoPlayer = remember(file.path) {
-        ExoPlayer.Builder(context).build().apply {
-            val mediaItem = MediaItem.fromUri(Uri.fromFile(File(file.path)))
-            setMediaItem(mediaItem)
-            prepare()
-            playWhenReady = false
+        try {
+            val f = File(file.path)
+            if (!f.exists()) null
+            else {
+                ExoPlayer.Builder(context).build().apply {
+                    val mediaItem = MediaItem.fromUri(Uri.fromFile(f))
+                    setMediaItem(mediaItem)
+                    addListener(object : androidx.media3.common.Player.Listener {
+                        override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            isPlaying = false
+                        }
+                    })
+                    prepare()
+                    playWhenReady = false
+                }
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 
     DisposableEffect(exoPlayer) {
         onDispose {
-            exoPlayer.release()
+            try {
+                exoPlayer?.release()
+            } catch (e: Exception) {}
         }
     }
 
     // Polling player position for scrubber
     LaunchedEffect(isPlaying) {
+        val player = exoPlayer ?: return@LaunchedEffect
         while (isPlaying) {
-            currentPositionMs = exoPlayer.currentPosition
-            durationMs = exoPlayer.duration.coerceAtLeast(1L)
+            try {
+                currentPositionMs = player.currentPosition
+                durationMs = player.duration.coerceAtLeast(1L)
+            } catch (e: Exception) {}
             delay(200)
         }
     }
@@ -76,41 +94,62 @@ fun VideoCardContent(
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        ZoomableBox(
-            isZoomMode = isZoomMode,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = exoPlayer
-                        useController = false
-                        layoutParams = FrameLayout.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    }
-                },
+        if (exoPlayer == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(colors.cardBackground),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "[ UNPLAYABLE VIDEO / FILE MOVED ]\n${file.fileName}",
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp,
+                    color = colors.accent
+                )
+            }
+        } else {
+            ZoomableBox(
+                isZoomMode = isZoomMode,
                 modifier = Modifier.fillMaxSize()
-            )
-        }
+            ) {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            player = exoPlayer
+                            useController = false
+                            layoutParams = FrameLayout.LayoutParams(
+                                ViewGroup.LayoutParams.MATCH_PARENT,
+                                ViewGroup.LayoutParams.MATCH_PARENT
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
 
-        // Tap overlay to play / pause
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable {
-                    if (!isZoomMode) {
-                        if (exoPlayer.isPlaying) {
-                            exoPlayer.pause()
-                            isPlaying = false
-                        } else {
-                            exoPlayer.play()
-                            isPlaying = true
+            // Tap overlay to play / pause
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable {
+                        if (!isZoomMode) {
+                            try {
+                                if (exoPlayer?.isPlaying == true) {
+                                    exoPlayer.pause()
+                                    isPlaying = false
+                                } else {
+                                    exoPlayer?.play()
+                                    isPlaying = true
+                                }
+                            } catch (e: Exception) {
+                                isPlaying = false
+                            }
                         }
                     }
-                }
-        )
+            )
+        }
 
         // Play icon overlay when paused
         if (!isPlaying && !isZoomMode) {
@@ -144,7 +183,7 @@ fun VideoCardContent(
                         value = (currentPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f),
                         onValueChange = { fraction ->
                             val seekTo = (fraction * durationMs).toLong()
-                            exoPlayer.seekTo(seekTo)
+                            exoPlayer?.seekTo(seekTo)
                             currentPositionMs = seekTo
                         },
                         colors = SliderDefaults.colors(

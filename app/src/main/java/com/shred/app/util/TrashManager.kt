@@ -62,21 +62,24 @@ class TrashManager(
 
     suspend fun restoreFromTrash(mediaFile: MediaFile): Boolean = withContext(Dispatchers.IO) {
         try {
-            val origPath = mediaFile.originalPathBeforeTrash ?: return@withContext false
-            val currentTrashFile = File(mediaFile.path)
+            val dbFile = repository.getById(mediaFile.id)
+            val origPath = dbFile?.originalPathBeforeTrash ?: mediaFile.originalPathBeforeTrash ?: mediaFile.path
+            val trashPath = if (dbFile != null && dbFile.isDeleted) dbFile.path else mediaFile.path
+
+            val currentTrashFile = File(trashPath)
             val targetOriginalFile = File(origPath)
 
             targetOriginalFile.parentFile?.mkdirs()
-            val moved = currentTrashFile.renameTo(targetOriginalFile)
-            if (moved || (!currentTrashFile.exists() && targetOriginalFile.exists())) {
-                repository.restoreFile(mediaFile, origPath)
-                true
-            } else {
-                currentTrashFile.copyTo(targetOriginalFile, overwrite = true)
-                currentTrashFile.delete()
-                repository.restoreFile(mediaFile, origPath)
-                true
+            if (currentTrashFile.exists() && origPath != trashPath) {
+                val moved = currentTrashFile.renameTo(targetOriginalFile)
+                if (!moved) {
+                    currentTrashFile.copyTo(targetOriginalFile, overwrite = true)
+                    currentTrashFile.delete()
+                }
             }
+
+            repository.restoreFile(mediaFile, origPath)
+            true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to restore file from trash: ${mediaFile.path}", e)
             false

@@ -29,6 +29,8 @@ import com.shred.app.ui.theme.ShredTheme
 
 class MainActivity : ComponentActivity() {
 
+    private var permissionState: MutableState<Boolean>? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -37,20 +39,23 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val settings by app.settingsRepository.getSettingsFlow().collectAsState(initial = AppSettings())
-            var hasStoragePermission by remember { mutableStateOf(checkStoragePermission()) }
+            val hasStoragePermissionState = remember { mutableStateOf(checkStoragePermission()) }
+            permissionState = hasStoragePermissionState
 
-            LaunchedEffect(Unit) {
-                hasStoragePermission = checkStoragePermission()
+            LaunchedEffect(hasStoragePermissionState.value) {
+                if (hasStoragePermissionState.value) {
+                    app.triggerBackgroundScan()
+                }
             }
 
             ShredTheme(themeMode = settings.themeMode) {
-                if (!hasStoragePermission) {
+                if (!hasStoragePermissionState.value) {
                     PermissionRequiredScreen(
                         onRequestPermission = {
                             requestStoragePermission()
                         },
                         onCheckAgain = {
-                            hasStoragePermission = checkStoragePermission()
+                            hasStoragePermissionState.value = checkStoragePermission()
                         }
                     )
                 } else {
@@ -63,7 +68,11 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Re-check permissions when returning from system settings
+        val isGranted = checkStoragePermission()
+        permissionState?.value = isGranted
+        if (isGranted) {
+            (application as ShredApplication).triggerBackgroundScan()
+        }
     }
 
     private fun checkStoragePermission(): Boolean {
