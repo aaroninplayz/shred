@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -13,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontFamily
@@ -42,15 +44,19 @@ fun SettingsScreen(
         }
     }
 
+    val isGlass = colors.isGlass
+    val headerShape = if (isGlass) RoundedCornerShape(20.dp) else RoundedCornerShape(0.dp)
+    val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
+
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = colors.background
+        containerColor = if (isGlass) Color.Transparent else colors.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .background(colors.background)
+                .background(if (isGlass) Color.Transparent else colors.background)
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
@@ -58,8 +64,17 @@ fun SettingsScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(2.dp, colors.borderSubtle)
-                    .background(colors.surface)
+                    .then(
+                        if (isGlass) {
+                            Modifier
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .shadow(8.dp, headerShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                                .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), headerShape)
+                        } else if (colors.borderWidth > 0.dp) {
+                            Modifier.border(2.dp, colors.borderSubtle)
+                        } else Modifier
+                    )
+                    .background(colors.surface, headerShape)
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -72,8 +87,8 @@ fun SettingsScreen(
                     )
                 }
                 Text(
-                    text = "SYSTEM CONFIG ///",
-                    fontFamily = FontFamily.Monospace,
+                    text = if (isGlass) "SYSTEM CONFIG" else "SYSTEM CONFIG ///",
+                    fontFamily = font,
                     fontWeight = FontWeight.Black,
                     fontSize = 18.sp,
                     color = colors.textPrimary
@@ -96,9 +111,9 @@ fun SettingsScreen(
                     onSelected = { viewModel.updateSettings(settings.copy(themeMode = it)) }
                 )
 
-                SettingProgressBarStyleSelector(
-                    current = settings.progressBarStyle,
-                    onSelected = { viewModel.updateSettings(settings.copy(progressBarStyle = it)) }
+                SettingColorModeSelector(
+                    current = settings.colorMode,
+                    onSelected = { viewModel.updateSettings(settings.copy(colorMode = it)) }
                 )
 
                 // Section 2: Sorting & Queues
@@ -115,6 +130,11 @@ fun SettingsScreen(
                 SettingScanModeSelector(
                     current = settings.scanMode,
                     onSelected = { viewModel.updateSettings(settings.copy(scanMode = it)) }
+                )
+
+                SettingScanScopeSelector(
+                    current = settings.scanScope,
+                    onSelected = { viewModel.updateSettings(settings.copy(scanScope = it)) }
                 )
 
                 SettingSlider(
@@ -197,9 +217,18 @@ fun SettingsScreen(
                 // Section 3: Trash & Auto-Purge
                 SettingsSectionHeader("03. TRASH RETENTION")
 
+                val retentionDays = settings.trashRetentionHours / 24
+                val retentionText = if (settings.trashRetentionHours < 24) {
+                    "${settings.trashRetentionHours} HOURS"
+                } else if (settings.trashRetentionHours % 24 == 0) {
+                    "${settings.trashRetentionHours} HOURS ($retentionDays DAYS)"
+                } else {
+                    "${settings.trashRetentionHours} HOURS"
+                }
+
                 SettingSlider(
                     label = "TRASH RETENTION",
-                    valueText = "${settings.trashRetentionHours} HOURS (${settings.trashRetentionHours / 24} DAYS)",
+                    valueText = retentionText,
                     value = settings.trashRetentionHours.toFloat(),
                     valueRange = 1f..1440f,
                     onValueChange = { viewModel.updateSettings(settings.copy(trashRetentionHours = it.toInt())) }
@@ -289,15 +318,32 @@ fun SettingsScreen(
 @Composable
 private fun SettingsSectionHeader(title: String) {
     val colors = LocalShredColors.current
-    Text(
-        text = title,
-        fontFamily = FontFamily.Monospace,
-        fontWeight = FontWeight.Black,
-        fontSize = 13.sp,
-        letterSpacing = 1.sp,
-        color = colors.accent,
-        modifier = Modifier.padding(top = 8.dp)
-    )
+    val isGlass = colors.isGlass
+    val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
+    val shape = if (isGlass || colors.cardCornerRadius > 0.dp) RoundedCornerShape(9999.dp) else RoundedCornerShape(0.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isGlass) {
+                    Modifier
+                        .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), shape)
+                        .background(colors.cardBackground, shape)
+                } else {
+                    Modifier.background(colors.invertedFill, shape)
+                }
+            )
+            .padding(horizontal = 14.dp, vertical = 7.dp)
+    ) {
+        Text(
+            text = title,
+            fontFamily = font,
+            fontWeight = FontWeight.Black,
+            fontSize = 11.sp,
+            letterSpacing = 1.5.sp,
+            color = if (isGlass) colors.accent else colors.invertedText
+        )
+    }
 }
 
 @Composable
@@ -309,19 +355,32 @@ private fun SettingSlider(
     onValueChange: (Float) -> Unit
 ) {
     val colors = LocalShredColors.current
+    val isGlass = colors.isGlass
+    val cardShape = RoundedCornerShape(if (isGlass) 16.dp else colors.cardCornerRadius)
+    val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.5.dp, colors.borderSubtle)
-            .background(colors.surface)
+            .then(
+                if (isGlass) {
+                    Modifier
+                        .shadow(6.dp, cardShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                        .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), cardShape)
+                } else if (colors.shadowElevation > 0.dp) {
+                    Modifier.shadow(colors.shadowElevation, cardShape)
+                } else {
+                    Modifier.border(1.5.dp, colors.borderSubtle, cardShape)
+                }
+            )
+            .background(colors.surface, cardShape)
             .padding(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(label, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
-            Text(valueText, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp, color = colors.accent)
+            Text(label, fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+            Text(valueText, fontFamily = font, fontWeight = FontWeight.Black, fontSize = 11.sp, color = colors.accent)
         }
         Slider(
             value = value,
@@ -343,16 +402,29 @@ private fun SettingToggle(
     onCheckedChange: (Boolean) -> Unit
 ) {
     val colors = LocalShredColors.current
+    val isGlass = colors.isGlass
+    val cardShape = RoundedCornerShape(if (isGlass) 16.dp else colors.cardCornerRadius)
+    val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.5.dp, colors.borderSubtle)
-            .background(colors.surface)
+            .then(
+                if (isGlass) {
+                    Modifier
+                        .shadow(6.dp, cardShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                        .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), cardShape)
+                } else if (colors.shadowElevation > 0.dp) {
+                    Modifier.shadow(colors.shadowElevation, cardShape)
+                } else {
+                    Modifier.border(1.5.dp, colors.borderSubtle, cardShape)
+                }
+            )
+            .background(colors.surface, cardShape)
             .padding(horizontal = 12.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(label, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textPrimary)
+        Text(label, fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textPrimary)
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,
@@ -367,67 +439,76 @@ private fun SettingToggle(
 @Composable
 private fun SettingThemeSelector(current: ThemeMode, onSelected: (ThemeMode) -> Unit) {
     val colors = LocalShredColors.current
+    val isGlass = colors.isGlass
+    val cardShape = RoundedCornerShape(if (isGlass) 16.dp else colors.cardCornerRadius)
+    val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(colors.borderWidth, colors.borderSubtle, shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius))
-            .background(colors.surface, shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius))
+            .then(
+                if (isGlass) {
+                    Modifier
+                        .shadow(6.dp, cardShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                        .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), cardShape)
+                } else if (colors.shadowElevation > 0.dp) {
+                    Modifier.shadow(colors.shadowElevation, cardShape)
+                } else {
+                    Modifier.border(colors.borderWidth, colors.borderSubtle, shape = cardShape)
+                }
+            )
+            .background(colors.surface, shape = cardShape)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text("THEME SYSTEM ///", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Black, fontSize = 11.sp, color = colors.accent)
+        Text("THEME SYSTEM", fontFamily = font, fontWeight = FontWeight.Black, fontSize = 11.sp, color = colors.accent)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             ThemeMode.values().forEach { mode ->
                 val isSelected = current == mode
-                val icon = when (mode) {
-                    ThemeMode.BRUTALISM -> "🎈"
-                    ThemeMode.MINIMALISM -> "🎈"
-                    ThemeMode.GLASSMORPHISM -> "✨"
-                }
                 val label = when (mode) {
-                    ThemeMode.BRUTALISM -> "BRUTALISM"
-                    ThemeMode.MINIMALISM -> "MINIMALISM"
-                    ThemeMode.GLASSMORPHISM -> "GLASSMORPHISM"
+                    ThemeMode.BRUTALISM -> "BRUTAL"
+                    ThemeMode.MINIMALISM -> "MINIMAL"
+                    ThemeMode.GLASSMORPHISM -> "GLASS"
                 }
+                val btnShape = RoundedCornerShape(if (mode == ThemeMode.GLASSMORPHISM) 12.dp else if (mode == ThemeMode.MINIMALISM) 8.dp else 0.dp)
 
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .graphicsLayer {
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(if (mode == ThemeMode.GLASSMORPHISM) 12.dp else if (mode == ThemeMode.MINIMALISM) 8.dp else 0.dp)
+                            shape = btnShape
                             clip = true
                         }
-                        .border(
-                            width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) colors.accent else colors.borderSubtle,
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(if (mode == ThemeMode.GLASSMORPHISM) 12.dp else if (mode == ThemeMode.MINIMALISM) 8.dp else 0.dp)
+                        .then(
+                            if (isSelected && isGlass) {
+                                Modifier.border(1.5.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), btnShape)
+                            } else {
+                                Modifier.border(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) colors.accent else colors.borderSubtle,
+                                    shape = btnShape
+                                )
+                            }
                         )
                         .background(
                             if (isSelected) colors.cardBackground else colors.surface,
-                            shape = androidx.compose.foundation.shape.RoundedCornerShape(if (mode == ThemeMode.GLASSMORPHISM) 12.dp else if (mode == ThemeMode.MINIMALISM) 8.dp else 0.dp)
+                            shape = btnShape
                         )
                         .clickable { onSelected(mode) }
-                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                        .padding(vertical = 14.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(icon, fontSize = 16.sp)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = label,
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
-                            fontSize = 9.sp,
-                            color = if (isSelected) colors.accent else colors.textSecondary,
-                            maxLines = 1
-                        )
-                    }
+                    Text(
+                        text = label,
+                        fontFamily = font,
+                        fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                        fontSize = 11.sp,
+                        letterSpacing = 1.sp,
+                        color = if (isSelected) colors.accent else colors.textSecondary,
+                        maxLines = 1
+                    )
                 }
             }
         }
@@ -437,97 +518,94 @@ private fun SettingThemeSelector(current: ThemeMode, onSelected: (ThemeMode) -> 
 @Composable
 private fun SettingSortOrderSelector(current: SortOrder, onSelected: (SortOrder) -> Unit) {
     val colors = LocalShredColors.current
+    val isGlass = colors.isGlass
+    val cardShape = RoundedCornerShape(if (isGlass) 16.dp else colors.cardCornerRadius)
+    val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.5.dp, colors.borderSubtle)
-            .background(colors.surface)
+            .then(
+                if (isGlass) {
+                    Modifier
+                        .shadow(6.dp, cardShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                        .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), cardShape)
+                } else if (colors.shadowElevation > 0.dp) {
+                    Modifier.shadow(colors.shadowElevation, cardShape)
+                } else {
+                    Modifier.border(1.5.dp, colors.borderSubtle, cardShape)
+                }
+            )
+            .background(colors.surface, cardShape)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("SORT ORDER", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+        Text("SORT ORDER", fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
         SortOrder.values().forEach { order ->
             val isSelected = current == order
+            val itemShape = if (isGlass || colors.cardCornerRadius > 0.dp) RoundedCornerShape(8.dp) else RoundedCornerShape(0.dp)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(if (isSelected) 1.5.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle)
-                    .background(if (isSelected) colors.cardBackground else colors.surface)
+                    .border(if (isSelected) 1.5.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle, itemShape)
+                    .background(if (isSelected) colors.cardBackground else colors.surface, itemShape)
                     .clickable { onSelected(order) }
                     .padding(8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(order.name.replace("_", " "), fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = if (isSelected) colors.accent else colors.textPrimary)
-                if (isSelected) Text("●", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = colors.accent)
+                Text(order.name.replace("_", " "), fontFamily = font, fontSize = 11.sp, color = if (isSelected) colors.accent else colors.textPrimary)
+                if (isSelected) Text("●", fontFamily = font, fontSize = 11.sp, color = colors.accent)
             }
         }
     }
 }
 
 @Composable
-private fun SettingProgressBarStyleSelector(current: ProgressBarStyle, onSelected: (ProgressBarStyle) -> Unit) {
+private fun SettingColorModeSelector(current: ColorMode, onSelected: (ColorMode) -> Unit) {
     val colors = LocalShredColors.current
+    val isGlass = colors.isGlass
+    val cardShape = RoundedCornerShape(if (isGlass) 16.dp else colors.cardCornerRadius)
+    val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.5.dp, colors.borderSubtle)
-            .background(colors.surface)
+            .then(
+                if (isGlass) {
+                    Modifier
+                        .shadow(6.dp, cardShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                        .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), cardShape)
+                } else if (colors.shadowElevation > 0.dp) {
+                    Modifier.shadow(colors.shadowElevation, cardShape)
+                } else {
+                    Modifier.border(1.5.dp, colors.borderSubtle, cardShape)
+                }
+            )
+            .background(colors.surface, cardShape)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("PROGRESS BAR STYLE", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
-        ProgressBarStyle.values().forEach { style ->
-            val isSelected = current == style
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(if (isSelected) 1.5.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle)
-                    .background(if (isSelected) colors.cardBackground else colors.surface)
-                    .clickable { onSelected(style) }
-                    .padding(8.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(style.name.replace("_", " "), fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = if (isSelected) colors.accent else colors.textPrimary)
-                if (isSelected) Text("●", fontFamily = FontFamily.Monospace, fontSize = 11.sp, color = colors.accent)
-            }
-        }
-    }
-}
-
-
-
-@Composable
-private fun SettingTransitionSelector(current: TransitionStyle, onSelected: (TransitionStyle) -> Unit) {
-    val colors = LocalShredColors.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .border(1.5.dp, colors.borderSubtle)
-            .background(colors.surface)
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text("TRANSITION STYLE", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+        Text("COLOR MODE", fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            TransitionStyle.values().forEach { trans ->
-                val isSelected = current == trans
+            ColorMode.values().forEach { mode ->
+                val isSelected = current == mode
+                val btnShape = if (isGlass || colors.cardCornerRadius > 0.dp) RoundedCornerShape(8.dp) else RoundedCornerShape(0.dp)
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle)
-                        .clickable { onSelected(trans) }
-                        .padding(vertical = 8.dp),
+                        .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle, btnShape)
+                        .background(if (isSelected) colors.cardBackground else colors.surface, btnShape)
+                        .clickable { onSelected(mode) }
+                        .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = trans.name.replace("_", "\n"),
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 9.sp,
-                        color = if (isSelected) colors.accent else colors.textSecondary,
-                        lineHeight = 11.sp
+                        text = mode.name,
+                        fontFamily = font,
+                        fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = if (isSelected) colors.accent else colors.textSecondary
                     )
                 }
             }
@@ -538,33 +616,47 @@ private fun SettingTransitionSelector(current: TransitionStyle, onSelected: (Tra
 @Composable
 private fun SettingScanModeSelector(current: ScanMode, onSelected: (ScanMode) -> Unit) {
     val colors = LocalShredColors.current
+    val isGlass = colors.isGlass
+    val cardShape = RoundedCornerShape(if (isGlass) 16.dp else colors.cardCornerRadius)
+    val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .border(1.5.dp, colors.borderSubtle)
-            .background(colors.surface)
+            .then(
+                if (isGlass) {
+                    Modifier
+                        .shadow(6.dp, cardShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                        .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), cardShape)
+                } else if (colors.shadowElevation > 0.dp) {
+                    Modifier.shadow(colors.shadowElevation, cardShape)
+                } else {
+                    Modifier.border(1.5.dp, colors.borderSubtle, cardShape)
+                }
+            )
+            .background(colors.surface, cardShape)
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("SCAN MODE", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+        Text("SCAN MODE", fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             ScanMode.values().forEach { mode ->
                 val isSelected = current == mode
+                val btnShape = if (isGlass || colors.cardCornerRadius > 0.dp) RoundedCornerShape(8.dp) else RoundedCornerShape(0.dp)
                 Box(
                     modifier = Modifier
                         .weight(1f)
-                        .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle)
-                        .background(if (isSelected) colors.cardBackground else colors.surface)
+                        .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle, btnShape)
+                        .background(if (isSelected) colors.cardBackground else colors.surface, btnShape)
                         .clickable { onSelected(mode) }
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = mode.name.replace("_", "\n"),
-                        fontFamily = FontFamily.Monospace,
+                        fontFamily = font,
                         fontSize = 9.sp,
                         color = if (isSelected) colors.accent else colors.textSecondary,
                         lineHeight = 11.sp
@@ -574,3 +666,77 @@ private fun SettingScanModeSelector(current: ScanMode, onSelected: (ScanMode) ->
         }
     }
 }
+
+@Composable
+private fun SettingScanScopeSelector(current: ScanScope, onSelected: (ScanScope) -> Unit) {
+    val colors = LocalShredColors.current
+    val isGlass = colors.isGlass
+    val cardShape = RoundedCornerShape(if (isGlass) 16.dp else colors.cardCornerRadius)
+    val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (isGlass) {
+                    Modifier
+                        .shadow(6.dp, cardShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                        .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), cardShape)
+                } else if (colors.shadowElevation > 0.dp) {
+                    Modifier.shadow(colors.shadowElevation, cardShape)
+                } else {
+                    Modifier.border(1.5.dp, colors.borderSubtle, cardShape)
+                }
+            )
+            .background(colors.surface, cardShape)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("SCAN SCOPE", fontFamily = font, fontWeight = FontWeight.Bold, fontSize = 11.sp, color = colors.textSecondary)
+            Text(
+                text = if (current == ScanScope.MEDIA_FOLDERS) "FAST // 1-2 SEC" else "DEEP CRAWL",
+                fontFamily = font,
+                fontWeight = FontWeight.Bold,
+                fontSize = 9.sp,
+                color = colors.accent
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            ScanScope.values().forEach { scope ->
+                val isSelected = current == scope
+                val btnShape = if (isGlass || colors.cardCornerRadius > 0.dp) RoundedCornerShape(8.dp) else RoundedCornerShape(0.dp)
+                val label = when (scope) {
+                    ScanScope.MEDIA_FOLDERS -> "MEDIA FOLDERS\n(FAST)"
+                    ScanScope.DEEP_STORAGE -> "DEEP STORAGE\n(FULL ROOT)"
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .border(if (isSelected) 2.dp else 1.dp, if (isSelected) colors.accent else colors.borderSubtle, btnShape)
+                        .background(if (isSelected) colors.cardBackground else colors.surface, btnShape)
+                        .clickable { onSelected(scope) }
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        fontFamily = font,
+                        fontWeight = if (isSelected) FontWeight.Black else FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = if (isSelected) colors.accent else colors.textSecondary,
+                        lineHeight = 13.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+        }
+    }
+}
+

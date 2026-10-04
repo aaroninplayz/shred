@@ -3,19 +3,31 @@ package com.shred.app.ui.screens.swipe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.shred.app.data.model.ActionType
 import com.shred.app.data.model.MediaFile
+import com.shred.app.data.model.MediaType
 import com.shred.app.ui.theme.LocalShredColors
 
 import androidx.compose.runtime.key
+import java.io.File
 
 @Composable
 fun CardStack(
@@ -26,6 +38,7 @@ fun CardStack(
     modifier: Modifier = Modifier
 ) {
     val colors = LocalShredColors.current
+    val context = LocalContext.current
 
     Box(
         modifier = modifier.fillMaxSize(),
@@ -66,15 +79,126 @@ fun CardStack(
                             if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier
                         )
                 ) {
-                    MediaCard(
-                        file = file,
-                        isTopCard = isTopCard,
-                        onSwiped = { action -> if (isTopCard) onSwiped(action, file) },
-                        onDragDelta = { _, _ -> },
-                        onFolderLongPress = onFolderLongPress,
-                        onZoomModeChanged = { isZoomed ->
-                            if (isTopCard) onZoomModeChanged?.invoke(isZoomed)
-                        }
+                    if (isTopCard) {
+                        // Top card: full interactive MediaCard with ExoPlayer/zoom/gestures
+                        MediaCard(
+                            file = file,
+                            isTopCard = true,
+                            onSwiped = { action -> onSwiped(action, file) },
+                            onDragDelta = { _, _ -> },
+                            onFolderLongPress = onFolderLongPress,
+                            onZoomModeChanged = { isZoomed ->
+                                onZoomModeChanged?.invoke(isZoomed)
+                            }
+                        )
+                    } else {
+                        // Background cards: lightweight thumbnail placeholder
+                        // No ExoPlayer, no zoom, no gesture handling — just a visual preview
+                        BackgroundCardThumbnail(
+                            file = file,
+                            context = context
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Lightweight thumbnail for background (non-top) cards in the stack.
+ * Renders a small image thumbnail for photos/videos, or a styled placeholder for audio.
+ * Does NOT create ExoPlayer instances or interactive gesture handlers.
+ */
+@Composable
+private fun BackgroundCardThumbnail(
+    file: MediaFile,
+    context: android.content.Context
+) {
+    val colors = LocalShredColors.current
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(colors.cardBackground)
+            .border(
+                width = colors.borderWidth,
+                color = colors.border,
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(colors.cardCornerRadius)
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        when (file.mediaType) {
+            MediaType.PHOTO -> {
+                // Small thumbnail for photo — uses tiny decode size
+                val diskFile = remember(file.path) { File(file.path) }
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(if (diskFile.exists()) diskFile else file.path)
+                        .size(200, 300)  // Very small thumbnail for background card
+                        .crossfade(false)
+                        .memoryCacheKey("thumb_${file.path}")
+                        .diskCacheKey("thumb_${file.path}")
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+            MediaType.VIDEO -> {
+                // Video frame thumbnail — uses Coil's VideoFrameDecoder
+                val diskFile = remember(file.path) { File(file.path) }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(if (diskFile.exists()) diskFile else file.path)
+                            .size(200, 300)
+                            .crossfade(false)
+                            .memoryCacheKey("thumb_${file.path}")
+                            .diskCacheKey("thumb_${file.path}")
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    // Video indicator overlay
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(32.dp)
+                            .background(Color.Black.copy(alpha = 0.5f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "▶",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            MediaType.AUDIO -> {
+                // Audio placeholder — styled box with icon, no ExoPlayer
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(
+                        text = "🎧",
+                        fontSize = 32.sp
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = file.fileName,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = colors.textSecondary,
+                        maxLines = 1
                     )
                 }
             }

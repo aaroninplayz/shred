@@ -45,7 +45,23 @@ data class FolderGroup(
     val mediaType: MediaType,
     val fileCount: Int,
     val totalSizeBytes: Long,
-    val files: List<MediaFile> = emptyList()
+    val files: List<MediaFile> = emptyList(),
+    val formatTypes: String = "",
+    val coverPath: String? = null
+)
+
+data class FolderSummary(
+    val folderPath: String,
+    val folderName: String,
+    val fileCount: Int,
+    val totalSizeBytes: Long,
+    val coverPath: String?
+)
+
+data class FormatTypeStat(
+    val extension: String,
+    val count: Int,
+    val totalSizeBytes: Long
 )
 
 data class ScanProgress(

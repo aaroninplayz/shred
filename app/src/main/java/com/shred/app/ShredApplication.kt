@@ -10,11 +10,18 @@ import com.shred.app.util.HapticFeedbackHelper
 import com.shred.app.util.SoundEffectHelper
 import com.shred.app.util.TrashManager
 
+import android.os.Build
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.decode.GifDecoder
+import coil.decode.ImageDecoderDecoder
+import coil.decode.SvgDecoder
+import coil.decode.VideoFrameDecoder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 
-class ShredApplication : Application() {
+class ShredApplication : Application(), ImageLoaderFactory {
 
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -58,7 +65,34 @@ class ShredApplication : Application() {
         }
     }
 
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .components {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    add(ImageDecoderDecoder.Factory())
+                } else {
+                    add(GifDecoder.Factory())
+                }
+                add(SvgDecoder.Factory())
+                add(VideoFrameDecoder.Factory())
+            }
+            .memoryCache {
+                coil.memory.MemoryCache.Builder(this)
+                    .maxSizePercent(0.25)  // 25% of available heap
+                    .build()
+            }
+            .diskCache {
+                coil.disk.DiskCache.Builder()
+                    .directory(cacheDir.resolve("coil_cache"))
+                    .maxSizeBytes(100L * 1024 * 1024)  // 100MB disk cache
+                    .build()
+            }
+            .crossfade(200)
+            .build()
+    }
+
     fun triggerBackgroundScan() {
         scanner.startBackgroundScan(applicationScope, settingsRepository)
     }
 }
+

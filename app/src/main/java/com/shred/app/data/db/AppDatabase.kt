@@ -10,7 +10,7 @@ import com.shred.app.data.model.MediaFile
 
 @Database(
     entities = [MediaFile::class, AppSettings::class],
-    version = 1,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(Converters::class)

@@ -29,13 +29,16 @@ import androidx.exifinterface.media.ExifInterface
 
 import android.provider.MediaStore
 
+import com.shred.app.data.model.ScanScope
+import kotlinx.coroutines.yield
+
 class MediaScanner(
     private val context: Context,
     private val mediaRepository: MediaRepository
 ) {
     companion object {
         private const val TAG = "MediaScanner"
-        private const val BATCH_SIZE = 25
+        private const val BATCH_SIZE = 250
     }
 
     private val _isScanning = MutableStateFlow(false)
@@ -72,7 +75,11 @@ class MediaScanner(
                     emptyList()
                 }
 
-                scanFileSystem(excludedList, appSettings.minFileSizeBytes).collect { progress ->
+                scanFileSystem(
+                    excludedFolders = excludedList,
+                    minSizeBytes = appSettings.minFileSizeBytes,
+                    scanScope = appSettings.scanScope
+                ).collect { progress ->
                     _scanProgress.value = progress
                 }
             } catch (e: Exception) {
@@ -83,7 +90,11 @@ class MediaScanner(
         }
     }
 
-    private fun scanMediaStore(minSizeBytes: Long, excludedFolders: List<String>): List<MediaFile> {
+    private fun scanMediaStore(
+        minSizeBytes: Long,
+        excludedFolders: List<String>,
+        scannedPaths: MutableSet<String>
+    ): List<MediaFile> {
         val result = mutableListOf<MediaFile>()
         val projection = arrayOf(
             MediaStore.MediaColumns.DATA,
@@ -111,6 +122,9 @@ class MediaScanner(
                     while (cursor.moveToNext()) {
                         val path = cursor.getString(dataCol) ?: continue
                         if (path.isEmpty()) continue
+                        val normalizedPath = try { File(path).canonicalPath } catch (e: Exception) { path }
+
+                        if (!scannedPaths.add(normalizedPath)) continue
 
                         val file = File(path)
                         val sizeBytes = if (sizeCol != -1) cursor.getLong(sizeCol) else if (file.exists()) file.length() else 0L
@@ -154,9 +168,14 @@ class MediaScanner(
         return result
     }
 
-    fun scanFileSystem(excludedFolders: List<String> = emptyList(), minSizeBytes: Long = 0): Flow<ScanProgress> = flow {
+    fun scanFileSystem(
+        excludedFolders: List<String> = emptyList(),
+        minSizeBytes: Long = 0,
+        scanScope: ScanScope = ScanScope.MEDIA_FOLDERS
+    ): Flow<ScanProgress> = flow {
         val rootDir = Environment.getExternalStorageDirectory()
 
+        val scannedPaths = mutableSetOf<String>()
         var scannedTotal = 0
         var mediaTotal = 0
         var photosTotal = 0
@@ -170,9 +189,11 @@ class MediaScanner(
         val batch = mutableListOf<MediaFile>()
 
         // 1. Initial High-Speed MediaStore ContentResolver Pass
-        val mediaStoreFiles = scanMediaStore(minSizeBytes, excludedFolders)
+        val mediaStoreFiles = scanMediaStore(minSizeBytes, excludedFolders, scannedPaths)
         if (mediaStoreFiles.isNotEmpty()) {
-            mediaRepository.insertDiscoveredFiles(mediaStoreFiles)
+            mediaStoreFiles.chunked(BATCH_SIZE).forEach { chunk ->
+                mediaRepository.insertDiscoveredFiles(chunk)
+            }
             mediaStoreFiles.forEach { file ->
                 mediaTotal++
                 scannedTotal++
@@ -203,37 +224,68 @@ class MediaScanner(
             return@flow
         }
 
-        // 2. Multi-Root Filesystem Crawler (DCIM, Pictures, Downloads, WhatsApp, Root)
-        val seedRoots = listOfNotNull(
-            rootDir,
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
-            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
-            File(rootDir, "Android/media"),
-            File(rootDir, "WhatsApp/Media"),
-            File(rootDir, "Telegram")
-        ).filter { it.exists() && it.isDirectory }
+        // 2. Multi-Root Filesystem Crawler (Targeted media folders vs Full deep crawl)
+        val seedRoots = if (scanScope == ScanScope.MEDIA_FOLDERS) {
+            listOfNotNull(
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                File(rootDir, "Android/media"),
+                File(rootDir, "WhatsApp/Media"),
+                File(rootDir, "Telegram")
+            ).filter { it.exists() && it.isDirectory }
+        } else {
+            listOfNotNull(
+                rootDir,
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                File(rootDir, "Android/media"),
+                File(rootDir, "WhatsApp/Media"),
+                File(rootDir, "Telegram")
+            ).filter { it.exists() && it.isDirectory }
+        }
 
         val visitedDirs = mutableSetOf<String>()
-        val queue = ArrayDeque<File>()
+        val queue = ArrayDeque<Pair<File, Int>>() // Directory and Depth
         seedRoots.forEach { dir ->
-            if (visitedDirs.add(dir.absolutePath)) {
-                queue.add(dir)
+            val dirPath = try { dir.canonicalPath } catch (e: Exception) { dir.absolutePath }
+            if (visitedDirs.add(dirPath)) {
+                queue.add(Pair(dir, 0))
             }
         }
 
         val trashFolderPath = File(rootDir, ".PhoneCleaner/trash").absolutePath
+        val maxDepth = if (scanScope == ScanScope.MEDIA_FOLDERS) 5 else 7
 
         while (queue.isNotEmpty()) {
-            val currentDir = queue.poll() ?: continue
+            val (currentDir, depth) = queue.poll() ?: continue
 
             val currentPath = currentDir.absolutePath
             if (currentPath.startsWith(trashFolderPath)) continue
             if (excludedFolders.any { currentPath.startsWith(it) }) continue
             if (currentPath.startsWith("/proc") || currentPath.startsWith("/sys") || currentPath.startsWith("/dev")) continue
+
+            // Prune heavy non-media directories
+            val dirNameLower = currentDir.name.lowercase()
+            if (dirNameLower == "android" && currentPath.endsWith("/android") && scanScope == ScanScope.DEEP_STORAGE) {
+                // Don't crawl Android/data or Android/obb (OS blocks them & causes heavy IO timeouts)
+                val androidMedia = File(currentDir, "media")
+                if (androidMedia.exists() && androidMedia.isDirectory) {
+                    val p = try { androidMedia.canonicalPath } catch (e: Exception) { androidMedia.absolutePath }
+                    if (visitedDirs.add(p)) queue.add(Pair(androidMedia, depth + 1))
+                }
+                continue
+            }
+            if (dirNameLower in listOf(".thumbnails", ".cache", "cache", ".git", ".gradle", "node_modules", "tmp")) {
+                continue
+            }
 
             val files = try {
                 currentDir.listFiles()
@@ -242,82 +294,95 @@ class MediaScanner(
             } ?: continue
 
             for (file in files) {
-                scannedTotal++
                 if (file.isDirectory) {
-                    if (!file.absolutePath.startsWith(trashFolderPath)) {
-                        queue.add(file)
-                    }
-                } else if (file.isFile && file.exists() && file.length() >= minSizeBytes) {
-                    val ext = file.extension.lowercase()
-                    val mediaType = FileExtensionRegistry.getMediaType(ext)
-                    if (mediaType != null) {
-                        val length = file.length()
-                        mediaTotal++
-                        when (mediaType) {
-                            MediaType.PHOTO -> {
-                                photosTotal++
-                                photosSize += length
-                            }
-                            MediaType.VIDEO -> {
-                                videosTotal++
-                                videosSize += length
-                            }
-                            MediaType.AUDIO -> {
-                                audioTotal++
-                                audioSize += length
-                            }
-                        }
-
-                        val isHidden = file.name.startsWith(".") || file.parent?.contains("/.") == true
-                        val parentFolder = file.parentFile
-                        val folderPath = parentFolder?.absolutePath ?: rootDir.absolutePath
-                        val folderName = parentFolder?.name?.ifEmpty { "Storage" } ?: "Storage"
-
-                        val mediaFile = MediaFile(
-                            path = file.absolutePath,
-                            fileName = file.name,
-                            folderPath = folderPath,
-                            folderName = folderName,
-                            sizeBytes = length,
-                            dateModified = file.lastModified(),
-                            dateTaken = file.lastModified(),
-                            width = 0,
-                            height = 0,
-                            durationMs = 0L,
-                            extension = ext,
-                            mediaType = mediaType,
-                            isHidden = isHidden
-                        )
-                        batch.add(mediaFile)
-
-                        if (batch.size >= BATCH_SIZE) {
-                            mediaRepository.insertDiscoveredFiles(batch.toList())
-                            batch.clear()
+                    if (depth < maxDepth) {
+                        val subDirPath = try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
+                        if (!subDirPath.startsWith(trashFolderPath) && visitedDirs.add(subDirPath)) {
+                            queue.add(Pair(file, depth + 1))
                         }
                     }
-                }
+                } else if (file.isFile && file.exists()) {
+                    val normalizedFilePath = try { file.canonicalPath } catch (e: Exception) { file.absolutePath }
+                    if (!scannedPaths.add(normalizedFilePath)) continue
 
-                val now = System.currentTimeMillis()
-                if (scannedTotal % 200 == 0 || (now - lastEmitTime) > 300) {
-                    lastEmitTime = now
-                    if (batch.isNotEmpty()) {
-                        mediaRepository.insertDiscoveredFiles(batch.toList())
-                        batch.clear()
+                    scannedTotal++
+                    val fileLength = file.length()
+                    if (fileLength <= 0) continue
+
+                    if (fileLength >= minSizeBytes) {
+                        val ext = file.extension.lowercase()
+                        val mediaType = FileExtensionRegistry.getMediaType(ext)
+                        if (mediaType != null) {
+                            val length = fileLength
+                            mediaTotal++
+                            when (mediaType) {
+                                MediaType.PHOTO -> {
+                                    photosTotal++
+                                    photosSize += length
+                                }
+                                MediaType.VIDEO -> {
+                                    videosTotal++
+                                    videosSize += length
+                                }
+                                MediaType.AUDIO -> {
+                                    audioTotal++
+                                    audioSize += length
+                                }
+                            }
+
+                            val isHidden = file.name.startsWith(".") || file.parent?.contains("/.") == true
+                            val parentFolder = file.parentFile
+                            val folderPath = parentFolder?.absolutePath ?: rootDir.absolutePath
+                            val folderName = parentFolder?.name?.ifEmpty { "Storage" } ?: "Storage"
+
+                            val mediaFile = MediaFile(
+                                path = file.absolutePath,
+                                fileName = file.name,
+                                folderPath = folderPath,
+                                folderName = folderName,
+                                sizeBytes = length,
+                                dateModified = file.lastModified(),
+                                dateTaken = file.lastModified(),
+                                width = 0,
+                                height = 0,
+                                durationMs = 0L,
+                                extension = ext,
+                                mediaType = mediaType,
+                                isHidden = isHidden
+                            )
+                            batch.add(mediaFile)
+
+                            if (batch.size >= BATCH_SIZE) {
+                                mediaRepository.insertDiscoveredFiles(batch.toList())
+                                batch.clear()
+                            }
+                        }
                     }
-                    emit(
-                        ScanProgress(
-                            scannedCount = scannedTotal,
-                            discoveredMediaCount = mediaTotal,
-                            discoveredPhotosCount = photosTotal,
-                            discoveredVideosCount = videosTotal,
-                            discoveredAudioCount = audioTotal,
-                            discoveredPhotosSize = photosSize,
-                            discoveredVideosSize = videosSize,
-                            discoveredAudioSize = audioSize,
-                            currentPath = file.name,
-                            isComplete = false
+
+                    // Cooperative CPU yield every 100 files
+                    if (scannedTotal % 100 == 0) {
+                        yield()
+                    }
+
+                    val now = System.currentTimeMillis()
+                    // Throttle UI progress emission to at least 400ms to preserve 120 FPS
+                    if (now - lastEmitTime >= 400) {
+                        lastEmitTime = now
+                        emit(
+                            ScanProgress(
+                                scannedCount = scannedTotal,
+                                discoveredMediaCount = mediaTotal,
+                                discoveredPhotosCount = photosTotal,
+                                discoveredVideosCount = videosTotal,
+                                discoveredAudioCount = audioTotal,
+                                discoveredPhotosSize = photosSize,
+                                discoveredVideosSize = videosSize,
+                                discoveredAudioSize = audioSize,
+                                currentPath = file.name,
+                                isComplete = false
+                            )
                         )
-                    )
+                    }
                 }
             }
         }

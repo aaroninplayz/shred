@@ -3,6 +3,7 @@ package com.shred.app.ui.screens.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.shred.app.data.model.AppSettings
+import com.shred.app.data.model.FormatTypeStat
 import com.shred.app.data.model.MediaType
 import com.shred.app.data.repository.MediaRepository
 import com.shred.app.data.repository.SettingsRepository
@@ -36,37 +37,40 @@ class HomeViewModel(
     private val scanner: MediaScanner
 ) : ViewModel() {
 
+    companion object {
+        private var persistedCategoryOrder: List<MediaType> = listOf(MediaType.PHOTO, MediaType.VIDEO, MediaType.AUDIO)
+    }
+
+    private val _categoryOrder = MutableStateFlow(persistedCategoryOrder)
+    val categoryOrder: StateFlow<List<MediaType>> = _categoryOrder.asStateFlow()
+
+    fun reorderCategory(looped: MediaType) {
+        val current = _categoryOrder.value
+        val updated = current.filter { it != looped } + looped
+        persistedCategoryOrder = updated
+        _categoryOrder.value = updated
+    }
+
+
     private val photoStats = combine(
-        mediaRepository.getActiveCountFlow(MediaType.PHOTO),
-        mediaRepository.getActiveTotalSizeFlow(MediaType.PHOTO),
         mediaRepository.getTotalCountFlow(MediaType.PHOTO),
         mediaRepository.getTotalSizeFlow(MediaType.PHOTO)
-    ) { activeCount, activeSize, totalCount, totalSize ->
-        val count = if (activeCount == 0 && totalCount > 0) totalCount else activeCount
-        val size = if (activeSize == 0L && totalSize > 0L) totalSize else activeSize
-        CategoryStats(count, size)
+    ) { totalCount, totalSize ->
+        CategoryStats(totalCount, totalSize)
     }
 
     private val videoStats = combine(
-        mediaRepository.getActiveCountFlow(MediaType.VIDEO),
-        mediaRepository.getActiveTotalSizeFlow(MediaType.VIDEO),
         mediaRepository.getTotalCountFlow(MediaType.VIDEO),
         mediaRepository.getTotalSizeFlow(MediaType.VIDEO)
-    ) { activeCount, activeSize, totalCount, totalSize ->
-        val count = if (activeCount == 0 && totalCount > 0) totalCount else activeCount
-        val size = if (activeSize == 0L && totalSize > 0L) totalSize else activeSize
-        CategoryStats(count, size)
+    ) { totalCount, totalSize ->
+        CategoryStats(totalCount, totalSize)
     }
 
     private val audioStats = combine(
-        mediaRepository.getActiveCountFlow(MediaType.AUDIO),
-        mediaRepository.getActiveTotalSizeFlow(MediaType.AUDIO),
         mediaRepository.getTotalCountFlow(MediaType.AUDIO),
         mediaRepository.getTotalSizeFlow(MediaType.AUDIO)
-    ) { activeCount, activeSize, totalCount, totalSize ->
-        val count = if (activeCount == 0 && totalCount > 0) totalCount else activeCount
-        val size = if (activeSize == 0L && totalSize > 0L) totalSize else activeSize
-        CategoryStats(count, size)
+    ) { totalCount, totalSize ->
+        CategoryStats(totalCount, totalSize)
     }
 
     private val globalStats = combine(
@@ -113,4 +117,17 @@ class HomeViewModel(
             settings = g.third
         )
     }.distinctUntilChanged().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), HomeUiState())
+
+    val photoFormatStats: StateFlow<List<FormatTypeStat>> =
+        mediaRepository.getFormatTypeStatsFlow(MediaType.PHOTO)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val videoFormatStats: StateFlow<List<FormatTypeStat>> =
+        mediaRepository.getFormatTypeStatsFlow(MediaType.VIDEO)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val audioFormatStats: StateFlow<List<FormatTypeStat>> =
+        mediaRepository.getFormatTypeStatsFlow(MediaType.AUDIO)
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 }
+

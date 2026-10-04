@@ -42,6 +42,7 @@ data class SwipeUiState(
 
 class SwipeViewModel(
     val mediaType: MediaType,
+    val folderPath: String? = null,
     private val mediaRepository: MediaRepository,
     private val settingsRepository: SettingsRepository,
     private val trashManager: TrashManager,
@@ -59,15 +60,46 @@ class SwipeViewModel(
         loadQueue()
     }
 
+    private var isLoadingMore = false
+
     private fun loadQueue() {
-        viewModelScope.launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             _uiState.value = _uiState.value.copy(isLoading = true)
             val settings = settingsRepository.getSettings()
-            var rawFiles = mediaRepository.getActiveQueue(mediaType)
 
-            if (rawFiles.isEmpty()) {
-                mediaRepository.resetKeptSession()
-                rawFiles = mediaRepository.getActiveQueue(mediaType)
+            val totalCount: Int
+            val initialKept: Int
+            val initialFav: Int
+            val initialDel: Int
+            val initialDelSize: Long
+
+            if (!folderPath.isNullOrEmpty()) {
+                totalCount = mediaRepository.getFolderTotalCount(folderPath, mediaType)
+                initialKept = mediaRepository.getFolderKeptCount(folderPath, mediaType)
+                initialFav = mediaRepository.getFolderFavoritedCount(folderPath, mediaType)
+                initialDel = mediaRepository.getFolderDeletedCount(folderPath, mediaType)
+                val folderDelSize = mediaRepository.getFolderDeletedSize(folderPath)
+                initialDelSize = if (folderDelSize > 0) folderDelSize else mediaRepository.getTotalDeletedSize()
+            } else {
+                totalCount = mediaRepository.getTotalCount(mediaType)
+                initialKept = mediaRepository.getKeptCount(mediaType)
+                initialFav = mediaRepository.getFavoritedCount(mediaType)
+                initialDel = mediaRepository.getDeletedCount(mediaType)
+                initialDelSize = mediaRepository.getTotalDeletedSize()
+            }
+
+            val reviewedCount = initialKept + initialFav + initialDel
+
+            val rawFiles = if (!folderPath.isNullOrEmpty()) {
+                mediaRepository.getFilesInFolderBatch(folderPath, mediaType, 300)
+            } else {
+                val active = mediaRepository.getActiveQueueBatch(mediaType, 300)
+                if (active.isEmpty()) {
+                    mediaRepository.resetKeptSession()
+                    mediaRepository.getActiveQueueBatch(mediaType, 300)
+                } else {
+                    active
+                }
             }
 
             // Apply Sort Order
@@ -97,8 +129,11 @@ class SwipeViewModel(
                 )
                 discoveredGroups.add(group)
 
-                // If folder has 4+ files and is not a generic root, offer folder header card first
-                if (files.size >= 4 && !path.endsWith("/DCIM/Camera") && !path.endsWith("/Pictures")) {
+                // When browsing a specific folder, every file is audited individually
+                // Never bundle the whole folder into one swipeable item
+                if (!folderPath.isNullOrEmpty()) {
+                    files.forEach { swipeItems.add(SwipeItem.SingleFile(it)) }
+                } else if (files.size >= 4 && !path.endsWith("/DCIM/Camera") && !path.endsWith("/Pictures")) {
                     swipeItems.add(SwipeItem.Group(group))
                 } else {
                     files.forEach { swipeItems.add(SwipeItem.SingleFile(it)) }
@@ -108,11 +143,40 @@ class SwipeViewModel(
             _uiState.value = _uiState.value.copy(
                 items = swipeItems,
                 allFolderGroups = discoveredGroups,
-                totalCount = sortedFiles.size,
-                currentPosition = 0,
+                currentPosition = reviewedCount,
+                totalCount = totalCount,
+                keptCount = initialKept,
+                deletedCount = initialDel,
+                favoritedCount = initialFav,
+                deletedSizeInSession = initialDelSize,
                 isLoading = false,
                 settings = settings
             )
+        }
+    }
+
+    private fun checkAndFetchMoreFiles() {
+        if (_uiState.value.items.size <= 10 && !isLoadingMore) {
+            isLoadingMore = true
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val nextFiles = if (!folderPath.isNullOrEmpty()) {
+                    mediaRepository.getFilesInFolderBatch(folderPath, mediaType, 300)
+                } else {
+                    mediaRepository.getActiveQueueBatch(mediaType, 300)
+                }
+                val currentIds = _uiState.value.items.mapNotNull {
+                    when (it) {
+                        is SwipeItem.SingleFile -> it.file.id
+                        is SwipeItem.Group -> null
+                    }
+                }.toSet()
+                val fresh = nextFiles.filter { !currentIds.contains(it.id) }
+                if (fresh.isNotEmpty()) {
+                    val newItems = _uiState.value.items + fresh.map { SwipeItem.SingleFile(it) }
+                    _uiState.value = _uiState.value.copy(items = newItems)
+                }
+                isLoadingMore = false
+            }
         }
     }
 
@@ -158,49 +222,53 @@ class SwipeViewModel(
     }
 
     fun handleSwipeAction(actionType: ActionType, file: MediaFile) {
-        viewModelScope.launch {
-            val settings = _uiState.value.settings
-            hapticHelper.triggerActionHaptic(actionType, settings.hapticsEnabled, settings.hapticIntensity)
-            soundHelper.playActionSound(actionType, settings.soundEnabled, settings.soundVolume)
+        val settings = _uiState.value.settings
+        hapticHelper.triggerActionHaptic(actionType, settings.hapticsEnabled, settings.hapticIntensity)
 
+        // Push to undo stack
+        undoStack.push(LastAction(actionType, file))
+
+        // Remove top item immediately from UI list for instant responsiveness
+        val updatedItems = _uiState.value.items.toMutableList()
+        if (updatedItems.isNotEmpty()) {
+            updatedItems.removeAt(0)
+        }
+
+        val newKept = if (actionType == ActionType.KEEP) _uiState.value.keptCount + 1 else _uiState.value.keptCount
+        val newDeleted = if (actionType == ActionType.DELETE) _uiState.value.deletedCount + 1 else _uiState.value.deletedCount
+        val newFav = if (actionType == ActionType.FAVORITE) _uiState.value.favoritedCount + 1 else _uiState.value.favoritedCount
+        val newFreed = if (actionType == ActionType.DELETE) _uiState.value.deletedSizeInSession + file.sizeBytes else _uiState.value.deletedSizeInSession
+
+        _uiState.value = _uiState.value.copy(
+            items = updatedItems,
+            keptCount = newKept,
+            deletedCount = newDeleted,
+            favoritedCount = newFav,
+            deletedSizeInSession = newFreed,
+            currentPosition = _uiState.value.currentPosition + 1,
+            canUndo = undoStack.isNotEmpty()
+        )
+
+        // Asynchronous DB operation off main thread
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             when (actionType) {
                 ActionType.KEEP -> {
                     mediaRepository.markAsKept(file.id)
-                    _uiState.value = _uiState.value.copy(
-                        keptCount = _uiState.value.keptCount + 1,
-                        currentPosition = _uiState.value.currentPosition + 1
-                    )
                 }
                 ActionType.DELETE -> {
-                    trashManager.moveToTrash(file)
-                    _uiState.value = _uiState.value.copy(
-                        deletedCount = _uiState.value.deletedCount + 1,
-                        deletedSizeInSession = _uiState.value.deletedSizeInSession + file.sizeBytes,
-                        currentPosition = _uiState.value.currentPosition + 1
-                    )
+                    try {
+                        trashManager.moveToTrash(file)
+                    } catch (e: Exception) {
+                        android.util.Log.e("SwipeViewModel", "Failed to move file to trash: ${file.path}", e)
+                    }
                 }
                 ActionType.FAVORITE -> {
                     mediaRepository.markAsFavorite(file.id)
-                    _uiState.value = _uiState.value.copy(
-                        favoritedCount = _uiState.value.favoritedCount + 1,
-                        currentPosition = _uiState.value.currentPosition + 1
-                    )
                 }
             }
-
-            // Push to undo stack
-            undoStack.push(LastAction(actionType, file))
-
-            // Remove top item from UI list
-            val updatedItems = _uiState.value.items.toMutableList()
-            if (updatedItems.isNotEmpty()) {
-                updatedItems.removeAt(0)
-            }
-            _uiState.value = _uiState.value.copy(
-                items = updatedItems,
-                canUndo = undoStack.isNotEmpty()
-            )
         }
+
+        checkAndFetchMoreFiles()
     }
 
     fun requestFolderDelete(group: FolderGroup) {
@@ -216,10 +284,14 @@ class SwipeViewModel(
         viewModelScope.launch {
             val settings = _uiState.value.settings
             hapticHelper.triggerActionHaptic(ActionType.DELETE, settings.hapticsEnabled, settings.hapticIntensity)
-            soundHelper.playActionSound(ActionType.DELETE, settings.soundEnabled, settings.soundVolume)
+            // Sound effects removed
 
             group.files.forEach { file ->
-                trashManager.moveToTrash(file)
+                try {
+                    trashManager.moveToTrash(file)
+                } catch (e: Exception) {
+                    android.util.Log.e("SwipeViewModel", "Failed to trash folder file: ${file.path}", e)
+                }
                 undoStack.push(LastAction(ActionType.DELETE, file))
             }
 
@@ -304,7 +376,11 @@ class SwipeViewModel(
         viewModelScope.launch {
             when (last.actionType) {
                 ActionType.DELETE -> {
-                    trashManager.restoreFromTrash(last.file)
+                    try {
+                        trashManager.restoreFromTrash(last.file)
+                    } catch (e: Exception) {
+                        android.util.Log.e("SwipeViewModel", "Failed to restore file from trash: ${last.file.path}", e)
+                    }
                     _uiState.value = _uiState.value.copy(
                         deletedCount = (_uiState.value.deletedCount - 1).coerceAtLeast(0),
                         deletedSizeInSession = (_uiState.value.deletedSizeInSession - last.file.sizeBytes).coerceAtLeast(0)

@@ -4,17 +4,33 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Brutalist S / Shredder blades icon -->
+    <!-- Brutalist Shredded S Logo - Dark Grey on Light Background -->
+    <!-- Top curve blade of S -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M24,28 h60 v12 h-60 z" />
+        android:fillColor="#1E1E24"
+        android:pathData="M28,24 L78,24 L84,36 L34,36 Z" />
+    <!-- Center diagonal slash bar -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M30,46 h10 v34 h-10 z" />
+        android:fillColor="#1E1E24"
+        android:pathData="M78,36 L32,58 L24,58 L70,36 Z" />
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M48,46 h10 v26 h-10 z" />
+        android:fillColor="#1E1E24"
+        android:pathData="M84,48 L38,72 L28,72 L74,48 Z" />
+    <!-- Bottom curve blade of S -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M66,46 h10 v38 h-10 z" />
+        android:fillColor="#1E1E24"
+        android:pathData="M24,72 L74,72 L80,84 L30,84 Z" />
+    <!-- Fragmented Shredded Shards -->
+    <path
+        android:fillColor="#1E1E24"
+        android:pathData="M20,32 L26,26 L24,38 Z" />
+    <path
+        android:fillColor="#1E1E24"
+        android:pathData="M82,68 L88,62 L86,74 Z" />
+    <path
+        android:fillColor="#1E1E24"
+        android:pathData="M18,60 L24,54 L22,64 Z" />
+    <path
+        android:fillColor="#1E1E24"
+        android:pathData="M84,40 L90,34 L88,44 Z" />
 </vector>

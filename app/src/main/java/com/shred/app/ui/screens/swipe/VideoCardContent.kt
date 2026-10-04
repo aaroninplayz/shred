@@ -1,6 +1,7 @@
 package com.shred.app.ui.screens.swipe
 
 import android.net.Uri
+import android.util.Log
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
@@ -45,25 +46,34 @@ fun VideoCardContent(
     var isFullscreenScrubber by remember { mutableStateOf(false) }
     var currentPositionMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
+    var hasError by remember { mutableStateOf(false) }
 
     val exoPlayer = remember(file.path) {
         try {
             val f = File(file.path)
-            if (!f.exists()) null
-            else {
+            if (!f.exists() || f.length() <= 0) {
+                hasError = true
+                null
+            } else {
                 ExoPlayer.Builder(context).build().apply {
                     val mediaItem = MediaItem.fromUri(Uri.fromFile(f))
                     setMediaItem(mediaItem)
+                    setHandleAudioBecomingNoisy(true)
                     addListener(object : androidx.media3.common.Player.Listener {
                         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            Log.e("VideoCardContent", "ExoPlayer error for ${file.fileName}: ${error.message}", error)
                             isPlaying = false
+                            hasError = true
                         }
                     })
-                    prepare()
+                    // NOTE: prepare() is called lazily on first play tap (not here)
+                    // to avoid buffering all videos in the stack simultaneously
                     playWhenReady = false
                 }
             }
         } catch (e: Exception) {
+            Log.e("VideoCardContent", "ExoPlayer creation failed for ${file.fileName}", e)
+            hasError = true
             null
         }
     }
@@ -71,19 +81,27 @@ fun VideoCardContent(
     DisposableEffect(exoPlayer) {
         onDispose {
             try {
+                exoPlayer?.stop()
                 exoPlayer?.release()
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                Log.w("VideoCardContent", "Error releasing ExoPlayer", e)
+            }
         }
     }
 
     // Polling player position for scrubber
     LaunchedEffect(isPlaying) {
         val player = exoPlayer ?: return@LaunchedEffect
-        while (isPlaying) {
+        while (isPlaying && !hasError) {
             try {
                 currentPositionMs = player.currentPosition
                 durationMs = player.duration.coerceAtLeast(1L)
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                Log.e("VideoCardContent", "Video polling error", e)
+                isPlaying = false
+                hasError = true
+                break
+            }
             delay(200)
         }
     }
@@ -94,7 +112,7 @@ fun VideoCardContent(
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        if (exoPlayer == null) {
+        if (exoPlayer == null || hasError) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -134,17 +152,22 @@ fun VideoCardContent(
                 modifier = Modifier
                     .fillMaxSize()
                     .clickable {
-                        if (!isZoomMode) {
+                        if (!isZoomMode && !hasError) {
                             try {
                                 if (exoPlayer?.isPlaying == true) {
                                     exoPlayer.pause()
                                     isPlaying = false
                                 } else {
+                                    if (exoPlayer?.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+                                        exoPlayer.prepare()
+                                    }
                                     exoPlayer?.play()
                                     isPlaying = true
                                 }
                             } catch (e: Exception) {
+                                Log.e("VideoCardContent", "Play/pause error", e)
                                 isPlaying = false
+                                hasError = true
                             }
                         }
                     }

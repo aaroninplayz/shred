@@ -26,24 +26,10 @@ enum class SortOrder {
     RANDOM
 }
 
-enum class ProgressBarStyle {
-    MINIMAL_COUNTER,
-    STORAGE_FREED,
-    RATIO_BAR,
-    NUMBERS_ONLY,
-    HIDDEN
-}
-
-enum class LoadingAnimation {
-    TYPEWRITER,
-    FADE_IN,
-    SLIDE_IN
-}
-
-enum class TransitionStyle {
-    FADE_TO_BLACK,
-    DIRECT,
-    CROSS_DISSOLVE
+enum class ColorMode {
+    LIGHT,
+    DARK,
+    SYSTEM
 }
 
 enum class ScanMode {
@@ -51,3 +37,9 @@ enum class ScanMode {
     INCREMENTAL,
     MANUAL
 }
+
+enum class ScanScope {
+    MEDIA_FOLDERS,
+    DEEP_STORAGE
+}
+

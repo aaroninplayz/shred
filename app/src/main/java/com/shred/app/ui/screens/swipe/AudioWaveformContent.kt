@@ -1,6 +1,7 @@
 package com.shred.app.ui.screens.swipe
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,27 +47,41 @@ fun AudioWaveformContent(
     var animTime by remember { mutableFloatStateOf(0f) }
 
     LaunchedEffect(file.path) {
-        waveformBars = WaveformSampler.sampleWaveform(file.path, barCount = 42)
+        waveformBars = try {
+            WaveformSampler.sampleWaveform(file.path, barCount = 42)
+        } catch (e: Exception) {
+            Log.e("AudioWaveformContent", "Waveform sampling failed for ${file.fileName}", e)
+            List(42) { kotlin.random.Random.nextFloat().coerceIn(0.15f, 1.0f) }
+        }
     }
+
+    var hasError by remember { mutableStateOf(false) }
 
     val exoPlayer = remember(file.path) {
         try {
             val f = File(file.path)
-            if (!f.exists()) null
-            else {
+            if (!f.exists() || f.length() <= 0) {
+                hasError = true
+                null
+            } else {
                 ExoPlayer.Builder(context).build().apply {
                     val mediaItem = MediaItem.fromUri(Uri.fromFile(f))
                     setMediaItem(mediaItem)
+                    setHandleAudioBecomingNoisy(true)
                     addListener(object : androidx.media3.common.Player.Listener {
                         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                            Log.e("AudioWaveformContent", "ExoPlayer error for ${file.fileName}: ${error.message}", error)
                             isPlaying = false
+                            hasError = true
                         }
                     })
-                    prepare()
+                    // NOTE: prepare() is called lazily on first play tap (not here)
                     playWhenReady = false
                 }
             }
         } catch (e: Exception) {
+            Log.e("AudioWaveformContent", "ExoPlayer creation failed for ${file.fileName}", e)
+            hasError = true
             null
         }
     }
@@ -74,38 +89,54 @@ fun AudioWaveformContent(
     DisposableEffect(exoPlayer) {
         onDispose {
             try {
+                exoPlayer?.stop()
                 exoPlayer?.release()
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                Log.w("AudioWaveformContent", "Error releasing ExoPlayer", e)
+            }
         }
     }
 
     // Update position and live visualizer animation ticker while playing
     LaunchedEffect(isPlaying) {
         val player = exoPlayer ?: return@LaunchedEffect
-        while (isPlaying && isActive) {
+        while (isPlaying && isActive && !hasError) {
             try {
                 currentPositionMs = player.currentPosition
                 durationMs = player.duration.coerceAtLeast(1L)
                 animTime += 0.05f
-            } catch (e: Exception) {}
-            delay(30)
+            } catch (e: Exception) {
+                Log.e("AudioWaveformContent", "Polling error", e)
+                isPlaying = false
+                hasError = true
+                break
+            }
+            delay(50)
         }
     }
 
     val togglePlayPause = {
         val player = exoPlayer
-        if (player != null) {
+        if (player != null && !hasError) {
             if (player.isPlaying) {
                 try {
                     player.pause()
-                } catch (e: Exception) {}
+                } catch (e: Exception) {
+                    Log.e("AudioWaveformContent", "Pause error", e)
+                    hasError = true
+                }
                 isPlaying = false
             } else {
                 try {
+                    if (player.playbackState == androidx.media3.common.Player.STATE_IDLE) {
+                        player.prepare()
+                    }
                     player.play()
                     isPlaying = true
                 } catch (e: Exception) {
+                    Log.e("AudioWaveformContent", "Play error", e)
                     isPlaying = false
+                    hasError = true
                 }
             }
         }

@@ -48,7 +48,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            ShredTheme(themeMode = settings.themeMode) {
+            ShredTheme(
+                themeMode = settings.themeMode,
+                colorMode = settings.colorMode
+            ) {
                 if (!hasStoragePermissionState.value) {
                     PermissionRequiredScreen(
                         onRequestPermission = {
@@ -76,8 +79,8 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun checkStoragePermission(): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) {
-            return true
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return Environment.isExternalStorageManager()
         }
         return hasMediaPermissions()
     }

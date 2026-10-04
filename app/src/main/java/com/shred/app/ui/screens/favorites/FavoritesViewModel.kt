@@ -37,22 +37,29 @@ class FavoritesViewModel(
         }
     }
 
-    fun handleSwipeAction(actionType: ActionType, file: MediaFile) {
+    fun unfavorite(file: MediaFile) {
         viewModelScope.launch {
             val settings = settingsRepository.getSettings()
-            hapticHelper.triggerActionHaptic(actionType, settings.hapticsEnabled, settings.hapticIntensity)
-            soundHelper.playActionSound(actionType, settings.soundEnabled, settings.soundVolume)
+            hapticHelper.triggerActionHaptic(ActionType.FAVORITE, settings.hapticsEnabled, settings.hapticIntensity)
+            soundHelper.playActionSound(ActionType.FAVORITE, settings.soundEnabled, settings.soundVolume)
+            mediaRepository.unfavorite(file.id)
+        }
+    }
 
-            when (actionType) {
-                ActionType.DELETE -> {
-                    trashManager.moveToTrash(file)
-                }
-                ActionType.KEEP,
-                ActionType.FAVORITE -> {
-                    // Retain in favorites, advance top card
-                    _favorites.value = _favorites.value.filterNot { it.id == file.id }
-                }
-            }
+    fun loopCard(file: MediaFile) {
+        val currentList = _favorites.value
+        if (currentList.isNotEmpty()) {
+            _favorites.value = currentList.filterNot { it.id == file.id } + file
+        }
+    }
+
+    fun focusItem(file: MediaFile) {
+        val current = _favorites.value.toMutableList()
+        val index = current.indexOfFirst { it.id == file.id }
+        if (index > 0) {
+            val item = current.removeAt(index)
+            current.add(0, item)
+            _favorites.value = current
         }
     }
 }

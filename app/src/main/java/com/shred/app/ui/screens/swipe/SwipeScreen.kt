@@ -3,42 +3,67 @@ package com.shred.app.ui.screens.swipe
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.shred.app.data.model.ActionType
-import com.shred.app.data.model.ProgressBarStyle
+import com.shred.app.data.model.MediaFile
+import com.shred.app.data.model.MediaType
+import com.shred.app.ui.components.CardDeck
+import com.shred.app.ui.components.DeckMode
+import com.shred.app.ui.components.SkeletonCardLoading
+import com.shred.app.ui.components.StatsPanel
 import com.shred.app.ui.theme.LocalShredColors
+import com.shred.app.ui.theme.SwipeDeleteRed
 import com.shred.app.util.FileSizeFormatter
-
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.draw.blur
+import java.io.File
 
 @Composable
 fun SwipeScreen(
     viewModel: SwipeViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToKept: () -> Unit = {},
+    onNavigateToFavorites: () -> Unit = {},
+    onNavigateToTrash: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
     val colors = LocalShredColors.current
+    val context = LocalContext.current
+
     var isZoomActive by remember { mutableStateOf(false) }
+    var isStatsPanelVisible by remember { mutableStateOf(false) }
+
+    // Flatten swipe items to get list of files
+    val files = remember(state.items) {
+        state.items.flatMap { item ->
+            when (item) {
+                is SwipeItem.SingleFile -> listOf(item.file)
+                is SwipeItem.Group -> item.group.files
+            }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Fullscreen Dark Backdrop when Zoom Mode is Active (drawn BEHIND content)
+        // Fullscreen Dark Backdrop when Zoom Mode is Active
         if (isZoomActive) {
             Box(
                 modifier = Modifier
@@ -47,27 +72,49 @@ fun SwipeScreen(
             )
         }
 
+        val isGlass = colors.isGlass
+        val headerShape = if (isGlass) RoundedCornerShape(20.dp) else RoundedCornerShape(0.dp)
+        val pillShape = if (isGlass || colors.cardCornerRadius > 0.dp) RoundedCornerShape(9999.dp) else RoundedCornerShape(0.dp)
+        val font = if (isGlass || colors.cardCornerRadius > 0.dp) FontFamily.Default else FontFamily.Monospace
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(if (isZoomActive) Color.Transparent else colors.background)
+                .background(if (isZoomActive || isGlass) Color.Transparent else colors.background)
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
-            // Top Header Bar
+            // 1. Top Minimal Header Bar (Swipe down reveals StatsPanel)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(2.dp, colors.borderSubtle)
-                    .background(colors.surface)
-                    .padding(horizontal = 12.dp, vertical = 10.dp)
-                    .then(if (isZoomActive) Modifier.blur(24.dp) else Modifier),
+                    .then(
+                        if (isGlass) {
+                            Modifier
+                                .padding(horizontal = 16.dp, vertical = 6.dp)
+                                .shadow(8.dp, headerShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                                .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), headerShape)
+                        } else if (colors.borderWidth > 0.dp) {
+                            Modifier.border(2.dp, colors.borderSubtle)
+                        } else Modifier
+                    )
+                    .background(colors.surface, headerShape)
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
+                    .then(if (isZoomActive) Modifier.blur(24.dp) else Modifier)
+                    .pointerInput(Unit) {
+                        detectVerticalDragGestures { _, dragAmount ->
+                            if (dragAmount > 15f) {
+                                isStatsPanelVisible = true
+                            }
+                        }
+                    },
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
@@ -76,348 +123,317 @@ fun SwipeScreen(
                             tint = colors.textPrimary
                         )
                     }
-                    Text(
-                        text = "[ ${viewModel.mediaType.name} ]",
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 16.sp,
-                        color = colors.textPrimary
-                    )
 
-                    Box(
-                        modifier = Modifier
-                            .border(1.5.dp, colors.accent)
-                            .background(colors.cardBackground)
-                            .clickable { viewModel.showFolderGrid() }
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
+                    Column {
                         Text(
-                            text = "FOLDERS 📂",
-                            fontFamily = FontFamily.Monospace,
+                            text = viewModel.mediaType.name,
+                            fontFamily = font,
+                            fontWeight = FontWeight.Black,
+                            fontSize = 15.sp,
+                            color = colors.textPrimary
+                        )
+                        val folderLabel = viewModel.folderPath?.substringAfterLast('/')?.ifEmpty { "ROOT" } ?: "ALL SECTORS"
+                        Text(
+                            text = "FOLDER: $folderLabel",
+                            fontFamily = font,
                             fontWeight = FontWeight.Bold,
-                            fontSize = 10.sp,
-                            color = colors.accent
+                            fontSize = 9.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = colors.textSecondary
                         )
                     }
                 }
 
-                // Undo Button
-                if (state.canUndo) {
-                    Box(
-                        modifier = Modifier
-                            .border(2.dp, colors.accent)
-                            .background(colors.cardBackground)
-                            .clickable { viewModel.performUndo() }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.Undo,
-                                contentDescription = "Undo",
-                                tint = colors.accent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = "UNDO",
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Black,
-                                fontSize = 11.sp,
-                                color = colors.accent
-                            )
-                        }
-                    }
+                // Stats Trigger Button (Inverted Pill)
+                Box(
+                    modifier = Modifier
+                        .then(
+                            if (isGlass) {
+                                Modifier
+                                    .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), pillShape)
+                                    .background(colors.cardBackground, pillShape)
+                            } else {
+                                Modifier.background(colors.invertedFill, pillShape)
+                            }
+                        )
+                        .clickable { isStatsPanelVisible = true }
+                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                ) {
+                    Text(
+                        text = "📊 STATS",
+                        fontFamily = font,
+                        fontWeight = FontWeight.Black,
+                        fontSize = 11.sp,
+                        color = if (isGlass) colors.accent else colors.invertedText
+                    )
                 }
             }
 
-            // Configurable Progress Bar Section
-            Box(modifier = Modifier.then(if (isZoomActive) Modifier.blur(24.dp) else Modifier)) {
-                ProgressBarSection(
-                    style = state.settings.progressBarStyle,
-                    current = state.currentPosition,
-                    total = state.totalCount,
-                    freedBytes = state.deletedSizeInSession,
-                    keptCount = state.keptCount,
-                    deletedCount = state.deletedCount
-                )
-            }
-
-            // Center Swiping Area
+            // 2. Center Swiping Card Deck Area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .padding(16.dp),
+                    .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
             ) {
                 if (state.isLoading) {
-                    // Loading Queue State
+                    SkeletonCardLoading()
+                } else if (files.isEmpty()) {
+                    // Empty State: All Clean
+                    val emptyShape = RoundedCornerShape(colors.cardCornerRadius)
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth(0.9f)
-                            .border(3.dp, colors.border)
-                            .background(colors.cardBackground)
-                            .padding(28.dp),
+                            .fillMaxHeight(0.86f)
+                            .aspectRatio(0.72f)
+                            .then(
+                                if (isGlass) {
+                                    Modifier
+                                        .shadow(12.dp, emptyShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                                        .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), emptyShape)
+                                } else {
+                                    Modifier.border(colors.borderWidth, colors.border, emptyShape)
+                                }
+                            )
+                            .background(colors.cardBackground, emptyShape)
+                            .padding(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "[ LOADING ${viewModel.mediaType.name} QUEUE... ]",
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp,
-                            color = colors.accent
-                        )
-                    }
-                } else if (state.items.isEmpty()) {
-                    // Empty / Cleaned State
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth(0.9f)
-                            .border(3.dp, colors.border)
-                            .background(colors.cardBackground)
-                            .padding(28.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Text(
-                            text = "ALL CLEAN ///",
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Black,
-                            fontSize = 24.sp,
-                            letterSpacing = 2.sp,
-                            color = colors.accent
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = "NO MORE UNREVIEWED ${viewModel.mediaType.name} FILES IN QUEUE.",
-                            fontFamily = FontFamily.Monospace,
-                            fontWeight = FontWeight.Normal,
-                            fontSize = 12.sp,
-                            color = colors.textSecondary
-                        )
-                        Spacer(modifier = Modifier.height(24.dp))
-                        Box(
-                            modifier = Modifier
-                                .border(2.dp, colors.border)
-                                .clickable { onNavigateBack() }
-                                .padding(horizontal = 16.dp, vertical = 10.dp)
-                        ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
-                                text = "[ RETURN TO SHREDDER ]",
-                                fontFamily = FontFamily.Monospace,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp,
-                                color = colors.textPrimary
+                                text = if (isGlass) "ALL CLEAN" else "ALL CLEAN ///",
+                                fontFamily = font,
+                                fontWeight = FontWeight.Black,
+                                fontSize = 28.sp,
+                                letterSpacing = 2.sp,
+                                color = colors.accent
                             )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "EVERY FILE IN THIS SECTOR HAS BEEN REVIEWED.",
+                                fontFamily = font,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 11.sp,
+                                lineHeight = 16.sp,
+                                color = colors.textSecondary
+                            )
+                            Spacer(modifier = Modifier.height(28.dp))
+                            val returnBtnShape = if (isGlass || colors.cardCornerRadius > 0.dp) RoundedCornerShape(9999.dp) else RoundedCornerShape(0.dp)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(0.7f)
+                                    .then(
+                                        if (isGlass) {
+                                            Modifier
+                                                .shadow(8.dp, returnBtnShape, ambientColor = androidx.compose.ui.graphics.Color(0x3300F2FE), spotColor = androidx.compose.ui.graphics.Color(0x22FF007F))
+                                                .border(1.dp, androidx.compose.ui.graphics.Brush.linearGradient(listOf(colors.border, colors.borderSubtle)), returnBtnShape)
+                                                .background(colors.cardBackground, returnBtnShape)
+                                        } else {
+                                            Modifier.background(colors.invertedFill, returnBtnShape)
+                                        }
+                                    )
+                                    .clickable { onNavigateBack() }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = if (isGlass) "RETURN" else "[ RETURN ]",
+                                    fontFamily = font,
+                                    fontWeight = FontWeight.Black,
+                                    fontSize = 13.sp,
+                                    color = if (isGlass) colors.accent else colors.invertedText
+                                )
+                            }
                         }
                     }
                 } else {
-                    when (val topItem = state.items.first()) {
-                        is SwipeItem.Group -> {
-                            FolderHeaderCard(
-                                folderGroup = topItem.group,
-                                onSwiped = { action -> viewModel.handleFolderGroupSwipe(action, topItem.group) },
-                                onReshuffle = { viewModel.reshuffleTopItem() },
-                                onExpandClick = { viewModel.expandFolderGroup(topItem.group) },
-                                onFolderLongPress = { viewModel.showFolderGrid() },
-                                modifier = Modifier.fillMaxSize(0.92f)
-                            )
-                        }
-                        is SwipeItem.SingleFile -> {
-                            // Extract all upcoming single files for the stack view
-                            val upcomingFiles = state.items.mapNotNull {
-                                (it as? SwipeItem.SingleFile)?.file
+                    CardDeck(
+                        items = files,
+                        deckMode = DeckMode.ACTION,
+                        keySelector = { it.id },
+                        onUndo = { viewModel.performUndo() },
+                        cardContent = { file, isTopCard ->
+                            if (isTopCard) {
+                                MediaCard(
+                                    file = file,
+                                    isTopCard = true,
+                                    onSwiped = { action -> viewModel.handleSwipeAction(action, file) },
+                                    onUndo = { viewModel.performUndo() },
+                                    onFolderLongPress = { isStatsPanelVisible = true },
+                                    onZoomModeChanged = { zoomed -> isZoomActive = zoomed }
+                                )
+                            } else {
+                                // Lightweight Background Thumbnail
+                                BackgroundCardThumbnail(file = file, context = context)
                             }
-                            CardStack(
-                                files = upcomingFiles,
-                                onSwiped = { action, file -> viewModel.handleSwipeAction(action, file) },
-                                onFolderLongPress = { viewModel.showFolderGrid() },
-                                onZoomModeChanged = { zoomed -> isZoomActive = zoomed }
-                            )
                         }
-                    }
+                    )
                 }
             }
         }
-    }
 
-    // Folder Grid Selector Dialog
-    if (state.isFolderGridVisible) {
-        FolderGridSelectorDialog(
-            folderGroups = state.allFolderGroups,
-            onSelectFolder = { group -> viewModel.selectFolderToStart(group) },
-            onDismiss = { viewModel.hideFolderGrid() }
+        // 3. Hidden Pull-Down Stats Panel
+        StatsPanel(
+            isVisible = isStatsPanelVisible,
+            currentPosition = state.currentPosition,
+            totalCount = state.totalCount,
+            keptCount = state.keptCount,
+            deletedCount = state.deletedCount,
+            favoritedCount = state.favoritedCount,
+            freedBytes = state.deletedSizeInSession,
+            currentFolderPath = viewModel.folderPath,
+            trashRetentionHours = state.settings.trashRetentionHours,
+            onDismiss = { isStatsPanelVisible = false },
+            onOpenFolderSelector = { viewModel.showFolderGrid() },
+            onNavigateToKept = {
+                isStatsPanelVisible = false
+                onNavigateToKept()
+            },
+            onNavigateToFavorites = {
+                isStatsPanelVisible = false
+                onNavigateToFavorites()
+            },
+            onNavigateToTrash = {
+                isStatsPanelVisible = false
+                onNavigateToTrash()
+            }
         )
-    }
 
-    // Folder Deletion Confirmation Pop-Up Dialog
-    val pendingGroup = state.pendingFolderDelete
-    if (pendingGroup != null) {
-        AlertDialog(
-            onDismissRequest = { viewModel.cancelFolderDelete() },
-            title = {
-                Text(
-                    text = "PURGE FOLDER CONTENTS? ///",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Black,
-                    fontSize = 16.sp,
-                    color = colors.accent
-                )
-            },
-            text = {
-                Column {
+        // 4. Folder Grid Selector Dialog
+        if (state.isFolderGridVisible) {
+            FolderGridSelectorDialog(
+                folderGroups = state.allFolderGroups,
+                onSelectFolder = { group ->
+                    viewModel.selectFolderToStart(group)
+                },
+                onDismiss = { viewModel.hideFolderGrid() }
+            )
+        }
+
+        // 5. Folder Mass Delete Confirmation Dialog
+        if (state.pendingFolderDelete != null) {
+            val group = state.pendingFolderDelete!!
+            AlertDialog(
+                onDismissRequest = { viewModel.cancelFolderDelete() },
+                title = {
                     Text(
-                        text = "Move all ${pendingGroup.fileCount} media files (${FileSizeFormatter.format(pendingGroup.totalSizeBytes)}) inside folder '${pendingGroup.folderName}' to trash? (Directory structure will remain on disk).",
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 12.sp,
-                        color = colors.textPrimary,
-                        lineHeight = 16.sp
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = pendingGroup.folderPath,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = 10.sp,
-                        color = colors.textSecondary
-                    )
-                }
-            },
-            confirmButton = {
-                Box(
-                    modifier = Modifier
-                        .border(2.dp, Color(0xFFFF2A2A))
-                        .background(Color(0xFFFF2A2A).copy(alpha = 0.15f))
-                        .clickable { viewModel.confirmFolderDelete() }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
-                    Text(
-                        text = "PURGE FILES",
+                        text = "PURGE FOLDER ///",
                         fontFamily = FontFamily.Monospace,
                         fontWeight = FontWeight.Black,
-                        fontSize = 11.sp,
-                        color = Color(0xFFFF2A2A)
+                        fontSize = 18.sp,
+                        color = SwipeDeleteRed
                     )
-                }
-            },
-            dismissButton = {
-                Box(
-                    modifier = Modifier
-                        .border(1.5.dp, colors.border)
-                        .clickable { viewModel.cancelFolderDelete() }
-                        .padding(horizontal = 14.dp, vertical = 8.dp)
-                ) {
+                },
+                text = {
                     Text(
-                        text = "CANCEL",
+                        text = "STAGE ALL ${group.fileCount} FILES IN '${group.folderName}' (${FileSizeFormatter.format(group.totalSizeBytes)}) FOR DELETION?",
                         fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp,
                         color = colors.textPrimary
                     )
-                }
-            },
-            containerColor = colors.cardBackground,
-            shape = MaterialTheme.shapes.extraSmall
-        )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.confirmFolderDelete() },
+                        colors = ButtonDefaults.buttonColors(containerColor = SwipeDeleteRed),
+                        shape = RoundedCornerShape(colors.cardCornerRadius)
+                    ) {
+                        Text("PURGE ENTIRE FOLDER", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.cancelFolderDelete() }) {
+                        Text("CANCEL", fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold, color = colors.textSecondary)
+                    }
+                },
+                containerColor = colors.surface,
+                shape = RoundedCornerShape(colors.cardCornerRadius)
+            )
+        }
     }
 }
 
 @Composable
-fun ProgressBarSection(
-    style: ProgressBarStyle,
-    current: Int,
-    total: Int,
-    freedBytes: Long,
-    keptCount: Int,
-    deletedCount: Int
+private fun BackgroundCardThumbnail(
+    file: MediaFile,
+    context: android.content.Context
 ) {
     val colors = LocalShredColors.current
+    val cardShape = RoundedCornerShape(colors.cardCornerRadius)
 
-    if (style == ProgressBarStyle.HIDDEN) return
-
-    Column(
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .background(colors.surface)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .fillMaxSize()
+            .background(Color.Black, cardShape)
+            .border(colors.borderWidth, colors.border, cardShape),
+        contentAlignment = Alignment.Center
     ) {
-        when (style) {
-            ProgressBarStyle.MINIMAL_COUNTER -> {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "PROGRESS",
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = colors.textSecondary
-                    )
-                    Text(
-                        text = "$current / $total",
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 12.sp,
-                        color = colors.accent
-                    )
-                }
-            }
-            ProgressBarStyle.STORAGE_FREED -> {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = "FREED IN SESSION",
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = colors.textSecondary
-                    )
-                    Text(
-                        text = FileSizeFormatter.format(freedBytes),
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Black,
-                        fontSize = 12.sp,
-                        color = colors.accent
-                    )
-                }
-            }
-            ProgressBarStyle.RATIO_BAR -> {
-                val totalActions = (keptCount + deletedCount).coerceAtLeast(1)
-                val keptRatio = keptCount.toFloat() / totalActions
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .border(1.dp, colors.borderSubtle)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .weight(keptRatio.coerceAtLeast(0.01f))
-                            .background(Color(0xFF00E676))
-                    )
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .weight((1f - keptRatio).coerceAtLeast(0.01f))
-                            .background(Color(0xFFFF2A2A))
-                    )
-                }
-            }
-            ProgressBarStyle.NUMBERS_ONLY -> {
-                Text(
-                    text = "REMAINING: ${(total - current).coerceAtLeast(0)}",
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 11.sp,
-                    color = colors.textPrimary
+        when (file.mediaType) {
+            MediaType.PHOTO -> {
+                val diskFile = remember(file.path) { File(file.path) }
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(if (diskFile.exists()) diskFile else file.path)
+                        .size(720, 1080)
+                        .bitmapConfig(android.graphics.Bitmap.Config.RGB_565)
+                        .crossfade(false)
+                        .memoryCacheKey("thumb_${file.path}")
+                        .diskCacheKey("thumb_${file.path}")
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
-            ProgressBarStyle.HIDDEN -> {}
+            MediaType.VIDEO -> {
+                val diskFile = remember(file.path) { File(file.path) }
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(context)
+                            .data(if (diskFile.exists()) diskFile else file.path)
+                            .size(200, 300)
+                            .bitmapConfig(android.graphics.Bitmap.Config.RGB_565)
+                            .crossfade(false)
+                            .memoryCacheKey("thumb_${file.path}")
+                            .diskCacheKey("thumb_${file.path}")
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(32.dp)
+                            .background(Color.Black.copy(alpha = 0.5f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(text = "▶", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            MediaType.AUDIO -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Text(text = "🎧", fontSize = 32.sp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = file.fileName,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        color = colors.textSecondary,
+                        maxLines = 1
+                    )
+                }
+            }
         }
     }
 }

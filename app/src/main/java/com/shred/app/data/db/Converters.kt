@@ -35,33 +35,13 @@ class Converters {
     }
 
     @TypeConverter
-    fun fromProgressBarStyle(value: ProgressBarStyle): String = value.name
+    fun fromColorMode(value: ColorMode): String = value.name
 
     @TypeConverter
-    fun toProgressBarStyle(value: String): ProgressBarStyle = try {
-        ProgressBarStyle.valueOf(value)
+    fun toColorMode(value: String): ColorMode = try {
+        ColorMode.valueOf(value)
     } catch (e: Exception) {
-        ProgressBarStyle.MINIMAL_COUNTER
-    }
-
-    @TypeConverter
-    fun fromLoadingAnimation(value: LoadingAnimation): String = value.name
-
-    @TypeConverter
-    fun toLoadingAnimation(value: String): LoadingAnimation = try {
-        LoadingAnimation.valueOf(value)
-    } catch (e: Exception) {
-        LoadingAnimation.TYPEWRITER
-    }
-
-    @TypeConverter
-    fun fromTransitionStyle(value: TransitionStyle): String = value.name
-
-    @TypeConverter
-    fun toTransitionStyle(value: String): TransitionStyle = try {
-        TransitionStyle.valueOf(value)
-    } catch (e: Exception) {
-        TransitionStyle.FADE_TO_BLACK
+        ColorMode.SYSTEM
     }
 
     @TypeConverter
@@ -72,5 +52,15 @@ class Converters {
         ScanMode.valueOf(value)
     } catch (e: Exception) {
         ScanMode.EVERY_LAUNCH
+    }
+
+    @TypeConverter
+    fun fromScanScope(value: ScanScope): String = value.name
+
+    @TypeConverter
+    fun toScanScope(value: String): ScanScope = try {
+        ScanScope.valueOf(value)
+    } catch (e: Exception) {
+        ScanScope.MEDIA_FOLDERS
     }
 }

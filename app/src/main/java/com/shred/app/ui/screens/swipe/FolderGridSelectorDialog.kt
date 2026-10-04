@@ -250,7 +250,12 @@ private fun GridThumbnail(filePath: String, mediaType: MediaType) {
                 .background(colors.cardBackground),
             contentAlignment = Alignment.Center
         ) {
-            Text(text = "🎵", fontSize = 16.sp)
+            Text(
+                text = "AUDIO",
+                fontWeight = FontWeight.Bold,
+                fontSize = 11.sp,
+                color = colors.textSecondary
+            )
         }
     } else {
         SubcomposeAsyncImage(

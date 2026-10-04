@@ -1,5 +1,5 @@
-# ⚡ SHRED (v1.5.0)
-> **Native Android Media Cleaner with Hot Air Balloon Buoyancy Physics, Tinder-Style Gestures, and Multi-Theme Design System**
+# ⚡ SHRED (v2.0)
+> **High-Performance Android Media Curator with GTA-Style Gesture Controls, Volumetric 3D Card Flips, Staged Vaults, and Industrial Aesthetics.**
 
 ```
    _____ _    _ _____  ______ _____  
@@ -10,73 +10,128 @@
 |_____/|_|  |_|_|  \_\______|_____/ 
 ```
 
-**SHRED** is a native Android application built in Kotlin and Jetpack Compose for Android 14+ (API 34+). It turns the tedious chore of purging unwanted photos, videos, and audio files across your device into an engaging experience powered by 2D rigid-body collision physics, custom Hot Air Balloon category components, and high-performance media players.
+**SHRED** is an opinionated, high-velocity native Android media cleaner built with Kotlin and Jetpack Compose for Android 14+ (API 34+). Designed to replace clunky gallery managers, SHRED lets you blitz through thousands of photos, videos, and audio tracks with ruthless efficiency using directional gesture locks, tactile velocity fling triggers, staged deletion buffers, and industrial-grade typography.
 
 ---
 
-## 🎯 Key Features
+## ⚡ What Makes SHRED Different?
 
-### 🎈 Hot Air Balloon Playground & Physics Engine
-- **Accurate Reference Silhouette**: Custom vector canvas rendering hot air balloons with a rounded dome top tapering down through straight diagonal side gores to a narrow neck and carriage basket.
-- **Dynamic Buoyancy Physics**: Altitude ($Y$-position) and vertical float velocity ($V_y$) are dynamically calculated based on category **Average File Size** relative to overall storage ($\text{Average Size} = \text{Total Size} / \text{File Count}$).
-- **2D Rigid-Body Physics**: Custom engine supporting Separating Axis Theorem (SAT) collision detection, wall reflections, drag, angular momentum, and pointer impulse physics.
-- **Clean Carriage Basket**: Payload text strictly formatted to display `[Category]` and `$count FILES • $sizeFormatted` without clutter.
+Most gallery cleaners either delete files instantly (leading to panic) or trap you in slow multi-step confirmation dialogues. SHRED combines fluid card physics with staged auto-purge vaults, GTA-inspired knockout action overlays, and true 3D spatial card rotations.
 
-### 🎨 3-Tier Design System & Night-and-Day Themes
-- 🗿 **Brutalism**: High-contrast stark monochrome layout with thick 3dp solid borders, hard drop shadows, and high-energy accent colors.
-- 🧘 **Minimalism**: Clean ultra-light aesthetic with subtle hairline borders, generous white space, soft neutral pastel cards, and refined typography.
-- 🪞 **Glassmorphism**: Translucent frosted glass effect using multi-layered acrylic blurs, vibrant dark gradients, and glowing borders.
+---
 
-### 🗄️ Robust Dual-Engine Scanner
-- **ContentResolver MediaStore Indexing**: Instant queries across `MediaStore.Images`, `MediaStore.Video`, and `MediaStore.Audio` for immediate file discovery.
-- **Recursive Storage Crawler**: Scans root directories (`DCIM`, `Pictures`, `Movies`, `Music`, `Downloads`, `Documents`, `WhatsApp`, `Telegram`, and hidden storage locations).
-- **Extensive Format Coverage**:
-  - 🖼️ **Photos**: JPG, PNG, GIF, BMP, WEBP, HEIC, HEIF, SVG, TIFF, RAW, CR2, NEF, ARW, DNG
+## 🎮 Gestures & Interaction Physics
+
+```
+                    ▲ [UP] FAVORITE
+                    │ (Golden Overlay)
+                    │
+   [LEFT] WASTED   ◀┼▶   [RIGHT] SAVED
+ (Crimson Overlay)  │   (Neon Lime Overlay)
+                    │
+                    ▼ [DOWN] METADATA FLIP
+                    (Electric Cyan Overlay)
+```
+
+- **Directional Axis Locking**: Intelligent 24dp center tolerance zone. Once you commit to horizontal or vertical movement, the orthogonal axis is hard-locked to prevent accidental diagonal mis-swipes.
+- **Flick & Velocity Commitment**: Fast flicks ($> 950\text{dp/s}$) trigger instant commits without needing a full screen drag. A strict displacement buffer ($\ge 45\text{dp}$) guarantees quick taps or jittery micro-drags never trigger an accidental deletion.
+- **GTA-Inspired Knockout Overlays**:
+  - 🛑 **WASTED** (Crimson `#FF0033`): Staged to the Trash Vault.
+  - 🟢 **SAVED** (Neon Lime `#00E676`): Kept in your library and marked as reviewed.
+  - ⭐ **FAVORITE** (Gold `#FFD700`): Pinned to the permanent Favorites Vault.
+  - 🔍 **METADATA** (Electric Cyan `#00E5FF`): Smoothly flips to the file telemetry view.
+- **3D Volumetric Card Thickness**: During vertical flips, a dynamic 3D rim slab extrudes along the flip axis. The card never collapses into an invisible 1-pixel flatline.
+- **Double-Tap Quick Inspect**: Double-tap any photo card to instantly zoom to $2.6\times$ with smooth boundary-constrained 1-finger / 2-finger panning. Double-tap again to reset cleanly back to stack mode.
+- **Aspect Ratio Parity**: Background deck layers share strict `ContentScale.Fit` letterboxing with the top card, eliminating preview zoom-jumps when discarding media.
+
+---
+
+## 🛡️ Vault Architecture & Staged Auto-Purge
+
+Never accidentally obliterate memories again:
+
+- 🗑️ **Staging Trash Vault (`/trash`)**: Media swiped left is moved to a private staging vault with a customizable grace period (1 hour default, configurable in Settings). Items can be reviewed, looped, or restored before the auto-purge executes.
+- 📁 **Kept Vault (`/kept`)**: Dedicated review deck for all preserved files.
+- ⭐ **Favorites Vault (`/favorites`)**: Fast-access collection for starred media.
+- 🤏 **Pinch-to-Zoom Responsive Grids**: Fluid pinch gestures inside vaults allow you to dynamically scale between single-card stacks and multi-column grid overviews.
+- 🧠 **Persistent Folder Memory**: Folder and category queues remember your exact browsing index and resume where you left off.
+- ⚡ **Skeleton Shimmer Engine**: Asynchronous media load states with shimmer skeleton placeholders to eliminate layout shifts and stutter.
+
+---
+
+## 🎨 Design Systems & Themes
+
+SHRED supports three switchable design languages:
+
+1. **Brutalism**: High-contrast monochrome palettes, bold monospace typography, sharp 3dp solid borders, and zero rounded fluff.
+2. **Minimalism**: Subtle hairline borders, generous negative space, refined typography, and neutral pastel undertones.
+3. **Glassmorphism**: Translucent frosted glass layers, multi-stop acrylic blurs, and vibrant ambient rim glows.
+
+---
+
+## 🗄️ Media Engine & Scanning Coverage
+
+- **Dual-Engine Deduplicating Scanner**: Combines `ContentResolver MediaStore` indices with deep recursive filesystem crawling across root storage (`DCIM`, `Pictures`, `Movies`, `Music`, `Downloads`, `Documents`, `WhatsApp`, `Telegram`, and hidden directories).
+- **Supported Media Formats**:
+  - 🖼️ **Photos**: JPG, PNG, GIF, BMP, WEBP, HEIC, HEIF, SVG, TIFF, DNG, RAW, CR2, NEF, ARW
   - 🎥 **Videos**: MP4, MKV, AVI, MOV, WMV, FLV, WEBM, 3GP, M4V, MPEG, MPG, TS
-  - 🎧 **Audio**: MP3, AAC, FLAC, WAV, OGG, M4A, WMA, OPUS, AMR, AIFF
-
-### 🃏 Tinder-Style Gesture Deck & Media Viewers
-- **Swipe LEFT** ➔ **DELETE** (Soft delete moved to hidden `.PhoneCleaner/trash/` directory)
-- **Swipe RIGHT** ➔ **KEEP** (Marked as reviewed, excluded until next reset cycle)
-- **Swipe UP** ➔ **FAVORITE** (Saved to permanent Favorites Vault)
-- **Swipe DOWN** ➔ **FLIP CARD** (3D vertical flip revealing all 7 file metadata attributes)
-- 🎧 **Live Audio Visualizer**: Real-time reactive frequency waveform visualizer with tap-to-toggle Play/Pause and a sleek bottom progress scrubbing bar.
-- 🖼️ **Dark Backdrop Zoom Mode**: Panning and pinch-zoom in photos against a dark background, hiding white borders for an immersive view.
-- **Single Revert**: Instant corner action to undo accidental swipes.
+  - 🎧 **Audio**: MP3, AAC, FLAC, WAV, OGG, M4A, WMA, OPUS, AMR, AIFF (features a live reactive frequency waveform visualizer)
 
 ---
 
-## 🛠️ Tech Stack & Architecture
+## 🛠️ Architecture & Tech Stack
 
+```
+com.shred.app
+ ├── data
+ │    ├── db            # Room Database (MediaFileDao, Converters, AppDatabase)
+ │    ├── model         # MediaFile, AppSettings, Enums, Filters
+ │    └── repository    # MediaRepository, SettingsRepository
+ ├── scanner            # Dual-engine recursive crawler & MediaStore synchronizer
+ ├── ui
+ │    ├── components    # VaultMediaCard, SkeletonLoading, WaveformVisualizer
+ │    ├── navigation    # Jetpack Compose Navigation & Deep Link Routes
+ │    ├── screens       # Swipe, Kept, Trash, Favorites, Folders, Settings
+ │    └── theme         # Brutalist, Minimalist, Glassmorphic Theme Engine
+ └── worker             # WorkManager staged auto-purge background services
+```
+
+- **Framework**: Jetpack Compose with Material 3 & Compose Canvas
 - **Language**: Kotlin 2.1.10
-- **UI Framework**: Jetpack Compose with Material 3 & Custom Canvas Graphics
-- **Local Database**: Room 2.6.1 (SQLite)
-- **Async & Reactive**: Kotlin Coroutines & StateFlow
-- **Image Pipeline**: Coil 2.7.0 (Image, Video frame, SVG, GIF support)
-- **Media Engine**: AndroidX Media3 / ExoPlayer 1.5.1
-- **Background Service**: WorkManager 2.10.0
-- **Haptic Engine**: Android VibrationEffect API
+- **Database**: Room 2.6.1 (SQLite with WAL mode)
+- **Concurrency**: Coroutines & Reactive StateFlow
+- **Image Pipeline**: Coil 2.7.0 (Frame decoder, SVG, GIF, Bitmap pooling)
+- **Audio/Video Playback**: AndroidX Media3 / ExoPlayer 1.5.1
+- **Background Tasks**: AndroidX WorkManager 2.10.0
 
 ---
 
-## 🚀 Building & Running
+## 🚀 Getting Started
 
 ### Prerequisites
 - Android Studio Ladybug / Meerkat (or newer)
-- Android SDK Platform 34+
-- Java JDK 17+
+- Android SDK Platform 34+ (Android 14+)
+- JDK 17+ or JDK 21
 
-### Sideload via Android Studio / CLI
-1. Clone the repository and open in Android Studio.
-2. Ensure your Android device (Android 14+) has **Developer Options** and **USB Debugging** enabled.
-3. Build and install:
+### Build & Install via CLI
 ```bash
+# Clone the repository
+git clone https://github.com/aaroninplayz/shred.git
+cd shred
+
+# Compile debug APK
+./gradlew assembleDebug
+
+# Install directly to attached test device
 ./gradlew installDebug
 ```
-4. On first launch, grant **All Files Access** (`MANAGE_EXTERNAL_STORAGE`) and **Media Permissions** to launch recursive storage scanning.
+
+### Required Device Permissions
+On first launch, grant:
+- **All Files Access** (`MANAGE_EXTERNAL_STORAGE`) — Required to stage and manage storage files directly.
+- **Media Permissions** (`READ_MEDIA_IMAGES`, `READ_MEDIA_VIDEO`, `READ_MEDIA_AUDIO`).
 
 ---
 
-## 📜 License
-Personal Use Application. Created by Aaron.
-
+## 📄 License
+Personal Use Application. Built by [Aaron](https://github.com/aaroninplayz).
