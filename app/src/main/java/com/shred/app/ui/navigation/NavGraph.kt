@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -137,15 +138,17 @@ fun ShredNavGraph(
             val rawFolderPath = backStackEntry.arguments?.getString("folderPath")
             val folderPath = if (!rawFolderPath.isNullOrEmpty()) Uri.decode(rawFolderPath) else null
 
-            val viewModel = SwipeViewModel(
-                mediaType = mediaType,
-                folderPath = folderPath,
-                mediaRepository = app.mediaRepository,
-                settingsRepository = app.settingsRepository,
-                trashManager = app.trashManager,
-                hapticHelper = app.hapticHelper,
-                soundHelper = app.soundHelper
-            )
+            val viewModel = remember(backStackEntry) {
+                SwipeViewModel(
+                    mediaType = mediaType,
+                    folderPath = folderPath,
+                    mediaRepository = app.mediaRepository,
+                    settingsRepository = app.settingsRepository,
+                    trashManager = app.trashManager,
+                    hapticHelper = app.hapticHelper,
+                    soundHelper = app.soundHelper
+                )
+            }
 
             SwipeScreen(
                 viewModel = viewModel,

@@ -34,6 +34,62 @@ interface MediaFileDao {
     @Query("SELECT * FROM media_files WHERE mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 LIMIT :limit")
     suspend fun getActiveQueueBatch(type: MediaType, limit: Int = 300): List<MediaFile>
 
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY 
+            CASE 
+                WHEN dateTaken > 0 THEN 
+                    CASE WHEN dateTaken < 10000000000 THEN dateTaken * 1000 ELSE dateTaken END
+                ELSE 
+                    CASE WHEN dateModified < 10000000000 THEN dateModified * 1000 ELSE dateModified END
+            END DESC,
+            dateModified DESC,
+            id DESC
+        LIMIT :limit
+    """)
+    suspend fun getActiveQueueBatchNewest(type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY 
+            CASE 
+                WHEN dateTaken > 0 THEN 
+                    CASE WHEN dateTaken < 10000000000 THEN dateTaken * 1000 ELSE dateTaken END
+                ELSE 
+                    CASE WHEN dateModified < 10000000000 THEN dateModified * 1000 ELSE dateModified END
+            END ASC,
+            dateModified ASC,
+            id ASC
+        LIMIT :limit
+    """)
+    suspend fun getActiveQueueBatchOldest(type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY sizeBytes DESC, id DESC
+        LIMIT :limit
+    """)
+    suspend fun getActiveQueueBatchLargest(type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY sizeBytes ASC, id ASC
+        LIMIT :limit
+    """)
+    suspend fun getActiveQueueBatchSmallest(type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY RANDOM()
+        LIMIT :limit
+    """)
+    suspend fun getActiveQueueBatchRandom(type: MediaType, limit: Int = 300): List<MediaFile>
+
     // Favorites queue
     @Query("SELECT * FROM media_files WHERE isFavorited = 1 AND isDeleted = 0 ORDER BY dateModified DESC")
     fun getFavoritesFlow(): Flow<List<MediaFile>>
@@ -135,6 +191,70 @@ interface MediaFileDao {
 
     @Query("SELECT * FROM media_files WHERE folderPath = :folderPath AND mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 LIMIT :limit")
     suspend fun getFilesInFolderBatch(folderPath: String, type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE folderPath = :folderPath AND mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY 
+            CASE 
+                WHEN dateTaken > 0 THEN 
+                    CASE WHEN dateTaken < 10000000000 THEN dateTaken * 1000 ELSE dateTaken END
+                ELSE 
+                    CASE WHEN dateModified < 10000000000 THEN dateModified * 1000 ELSE dateModified END
+            END DESC,
+            dateModified DESC,
+            id DESC
+        LIMIT :limit
+    """)
+    suspend fun getFilesInFolderBatchNewest(folderPath: String, type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE folderPath = :folderPath AND mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY 
+            CASE 
+                WHEN dateTaken > 0 THEN 
+                    CASE WHEN dateTaken < 10000000000 THEN dateTaken * 1000 ELSE dateTaken END
+                ELSE 
+                    CASE WHEN dateModified < 10000000000 THEN dateModified * 1000 ELSE dateModified END
+            END ASC,
+            dateModified ASC,
+            id ASC
+        LIMIT :limit
+    """)
+    suspend fun getFilesInFolderBatchOldest(folderPath: String, type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE folderPath = :folderPath AND mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY sizeBytes DESC, id DESC
+        LIMIT :limit
+    """)
+    suspend fun getFilesInFolderBatchLargest(folderPath: String, type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE folderPath = :folderPath AND mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY sizeBytes ASC, id ASC
+        LIMIT :limit
+    """)
+    suspend fun getFilesInFolderBatchSmallest(folderPath: String, type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        SELECT * FROM media_files 
+        WHERE folderPath = :folderPath AND mediaType = :type AND isKept = 0 AND isFavorited = 0 AND isDeleted = 0 
+        ORDER BY RANDOM()
+        LIMIT :limit
+    """)
+    suspend fun getFilesInFolderBatchRandom(folderPath: String, type: MediaType, limit: Int = 300): List<MediaFile>
+
+    @Query("""
+        UPDATE media_files 
+        SET dateTaken = :dateTaken,
+            dateModified = :dateModified
+        WHERE path = :path AND (dateTaken <= 0 OR dateTaken = dateModified)
+    """)
+    suspend fun updateDatesIfMissing(path: String, dateTaken: Long, dateModified: Long)
 
     @Query("""
         SELECT folderPath, folderName, COUNT(*) AS fileCount, COALESCE(SUM(sizeBytes), 0) AS totalSizeBytes, MIN(path) AS coverPath

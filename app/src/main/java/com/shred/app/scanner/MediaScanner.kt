@@ -96,13 +96,6 @@ class MediaScanner(
         scannedPaths: MutableSet<String>
     ): List<MediaFile> {
         val result = mutableListOf<MediaFile>()
-        val projection = arrayOf(
-            MediaStore.MediaColumns.DATA,
-            MediaStore.MediaColumns.DISPLAY_NAME,
-            MediaStore.MediaColumns.SIZE,
-            MediaStore.MediaColumns.DATE_MODIFIED
-        )
-
         val uris = listOf(
             MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
             MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
@@ -110,12 +103,31 @@ class MediaScanner(
         )
 
         for (uri in uris) {
+            val isAudioUri = (uri == MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)
+            val projection = if (isAudioUri) {
+                arrayOf(
+                    MediaStore.MediaColumns.DATA,
+                    MediaStore.MediaColumns.DISPLAY_NAME,
+                    MediaStore.MediaColumns.SIZE,
+                    MediaStore.MediaColumns.DATE_MODIFIED
+                )
+            } else {
+                arrayOf(
+                    MediaStore.MediaColumns.DATA,
+                    MediaStore.MediaColumns.DISPLAY_NAME,
+                    MediaStore.MediaColumns.SIZE,
+                    MediaStore.MediaColumns.DATE_MODIFIED,
+                    "datetaken"
+                )
+            }
+
             try {
                 context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
                     val dataCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
                     val nameCol = cursor.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
                     val sizeCol = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
                     val dateCol = cursor.getColumnIndex(MediaStore.MediaColumns.DATE_MODIFIED)
+                    val dateTakenCol = if (!isAudioUri) cursor.getColumnIndex("datetaken") else -1
 
                     if (dataCol == -1) return@use
 
@@ -140,7 +152,28 @@ class MediaScanner(
                         val folderPath = parentFolder?.absolutePath ?: ""
                         val folderName = parentFolder?.name?.ifEmpty { "Storage" } ?: "Storage"
                         val fileName = if (nameCol != -1 && !cursor.getString(nameCol).isNullOrEmpty()) cursor.getString(nameCol) else file.name
-                        val dateMod = if (dateCol != -1) cursor.getLong(dateCol) * 1000L else if (file.exists()) file.lastModified() else System.currentTimeMillis()
+
+                        val rawDateMod = if (dateCol != -1) cursor.getLong(dateCol) else 0L
+                        val dateMod = if (rawDateMod > 0L) {
+                            if (rawDateMod < 10_000_000_000L) rawDateMod * 1000L else rawDateMod
+                        } else if (file.exists()) {
+                            file.lastModified()
+                        } else {
+                            System.currentTimeMillis()
+                        }
+
+                        val rawDateTaken = if (dateTakenCol != -1) cursor.getLong(dateTakenCol) else 0L
+                        var resolvedDateTaken = if (rawDateTaken > 0L) {
+                            if (rawDateTaken < 10_000_000_000L) rawDateTaken * 1000L else rawDateTaken
+                        } else 0L
+
+                        if (resolvedDateTaken <= 0L) {
+                            resolvedDateTaken = com.shred.app.util.DateUtils.parseDateFromFilename(fileName)
+                        }
+
+                        if (resolvedDateTaken <= 0L) {
+                            resolvedDateTaken = dateMod
+                        }
 
                         result.add(
                             MediaFile(
@@ -150,7 +183,7 @@ class MediaScanner(
                                 folderName = folderName,
                                 sizeBytes = sizeBytes,
                                 dateModified = dateMod,
-                                dateTaken = dateMod,
+                                dateTaken = resolvedDateTaken,
                                 width = 0,
                                 height = 0,
                                 durationMs = 0L,
@@ -335,14 +368,20 @@ class MediaScanner(
                             val folderPath = parentFolder?.absolutePath ?: rootDir.absolutePath
                             val folderName = parentFolder?.name?.ifEmpty { "Storage" } ?: "Storage"
 
+                            val dateMod = file.lastModified()
+                            var dateTaken = com.shred.app.util.DateUtils.parseDateFromFilename(file.name)
+                            if (dateTaken <= 0L) {
+                                dateTaken = dateMod
+                            }
+
                             val mediaFile = MediaFile(
                                 path = file.absolutePath,
                                 fileName = file.name,
                                 folderPath = folderPath,
                                 folderName = folderName,
                                 sizeBytes = length,
-                                dateModified = file.lastModified(),
-                                dateTaken = file.lastModified(),
+                                dateModified = dateMod,
+                                dateTaken = dateTaken,
                                 width = 0,
                                 height = 0,
                                 durationMs = 0L,

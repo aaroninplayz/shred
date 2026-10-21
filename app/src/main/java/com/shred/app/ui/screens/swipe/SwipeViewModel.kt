@@ -58,6 +58,23 @@ class SwipeViewModel(
 
     init {
         loadQueue()
+        observeSettings()
+    }
+
+    private var settingsJob: kotlinx.coroutines.Job? = null
+
+    private fun observeSettings() {
+        settingsJob?.cancel()
+        settingsJob = viewModelScope.launch {
+            settingsRepository.getSettingsFlow().collect { newSettings ->
+                val currentSort = _uiState.value.settings.sortOrder
+                val sortChanged = currentSort != newSettings.sortOrder
+                _uiState.value = _uiState.value.copy(settings = newSettings)
+                if (sortChanged) {
+                    loadQueue()
+                }
+            }
+        }
     }
 
     private var isLoadingMore = false
@@ -91,35 +108,29 @@ class SwipeViewModel(
             val reviewedCount = initialKept + initialFav + initialDel
 
             val rawFiles = if (!folderPath.isNullOrEmpty()) {
-                mediaRepository.getFilesInFolderBatch(folderPath, mediaType, 300)
+                mediaRepository.getFilesInFolderBatch(folderPath, mediaType, settings.sortOrder, 300)
             } else {
-                val active = mediaRepository.getActiveQueueBatch(mediaType, 300)
+                val active = mediaRepository.getActiveQueueBatch(mediaType, settings.sortOrder, 300)
                 if (active.isEmpty()) {
                     mediaRepository.resetKeptSession()
-                    mediaRepository.getActiveQueueBatch(mediaType, 300)
+                    mediaRepository.getActiveQueueBatch(mediaType, settings.sortOrder, 300)
                 } else {
                     active
                 }
             }
 
-            // Apply Sort Order
-            val sortedFiles = when (settings.sortOrder) {
-                SortOrder.OLDEST_FIRST -> rawFiles.sortedBy { if (it.dateTaken > 0) it.dateTaken else it.dateModified }
-                SortOrder.NEWEST_FIRST -> rawFiles.sortedByDescending { if (it.dateTaken > 0) it.dateTaken else it.dateModified }
-                SortOrder.LARGEST_FIRST -> rawFiles.sortedByDescending { it.sizeBytes }
-                SortOrder.SMALLEST_FIRST -> rawFiles.sortedBy { it.sizeBytes }
-                SortOrder.RANDOM -> rawFiles.shuffled()
-            }
+            // Apply precise sorting via DateUtils (prioritizing true capture time, then modified time, then size)
+            val sortedFiles = com.shred.app.util.DateUtils.sortMediaFiles(rawFiles, settings.sortOrder)
 
             allQueueFiles = sortedFiles.toMutableList()
 
-            // Group into folder cards
-            val folderGroups = sortedFiles.groupBy { it.folderPath }
-            val swipeItems = mutableListOf<SwipeItem>()
-            val discoveredGroups = mutableListOf<FolderGroup>()
+            // Card deck items strictly 1:1 in sorted order (no folder clumping)
+            val swipeItems = sortedFiles.map { SwipeItem.SingleFile(it) }
 
-            for ((path, files) in folderGroups) {
-                val group = FolderGroup(
+            // Group into folder summaries for pull-down panel / stats, without disturbing card deck sequence
+            val folderGroups = sortedFiles.groupBy { it.folderPath }
+            val discoveredGroups = folderGroups.map { (path, files) ->
+                FolderGroup(
                     folderPath = path,
                     folderName = files.first().folderName,
                     mediaType = mediaType,
@@ -127,17 +138,6 @@ class SwipeViewModel(
                     totalSizeBytes = files.sumOf { it.sizeBytes },
                     files = files
                 )
-                discoveredGroups.add(group)
-
-                // When browsing a specific folder, every file is audited individually
-                // Never bundle the whole folder into one swipeable item
-                if (!folderPath.isNullOrEmpty()) {
-                    files.forEach { swipeItems.add(SwipeItem.SingleFile(it)) }
-                } else if (files.size >= 4 && !path.endsWith("/DCIM/Camera") && !path.endsWith("/Pictures")) {
-                    swipeItems.add(SwipeItem.Group(group))
-                } else {
-                    files.forEach { swipeItems.add(SwipeItem.SingleFile(it)) }
-                }
             }
 
             _uiState.value = _uiState.value.copy(
@@ -159,10 +159,11 @@ class SwipeViewModel(
         if (_uiState.value.items.size <= 10 && !isLoadingMore) {
             isLoadingMore = true
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                val settings = _uiState.value.settings
                 val nextFiles = if (!folderPath.isNullOrEmpty()) {
-                    mediaRepository.getFilesInFolderBatch(folderPath, mediaType, 300)
+                    mediaRepository.getFilesInFolderBatch(folderPath, mediaType, settings.sortOrder, 300)
                 } else {
-                    mediaRepository.getActiveQueueBatch(mediaType, 300)
+                    mediaRepository.getActiveQueueBatch(mediaType, settings.sortOrder, 300)
                 }
                 val currentIds = _uiState.value.items.mapNotNull {
                     when (it) {
@@ -172,7 +173,8 @@ class SwipeViewModel(
                 }.toSet()
                 val fresh = nextFiles.filter { !currentIds.contains(it.id) }
                 if (fresh.isNotEmpty()) {
-                    val newItems = _uiState.value.items + fresh.map { SwipeItem.SingleFile(it) }
+                    val sortedFresh = com.shred.app.util.DateUtils.sortMediaFiles(fresh, settings.sortOrder)
+                    val newItems = _uiState.value.items + sortedFresh.map { SwipeItem.SingleFile(it) }
                     _uiState.value = _uiState.value.copy(items = newItems)
                 }
                 isLoadingMore = false

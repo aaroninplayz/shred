@@ -18,12 +18,36 @@ class MediaRepository(
         return dao.getActiveQueueBatch(type, limit)
     }
 
+    suspend fun getActiveQueueBatch(type: MediaType, sortOrder: SortOrder, limit: Int = 300): List<MediaFile> {
+        return when (sortOrder) {
+            SortOrder.NEWEST_FIRST -> dao.getActiveQueueBatchNewest(type, limit)
+            SortOrder.OLDEST_FIRST -> dao.getActiveQueueBatchOldest(type, limit)
+            SortOrder.LARGEST_FIRST -> dao.getActiveQueueBatchLargest(type, limit)
+            SortOrder.SMALLEST_FIRST -> dao.getActiveQueueBatchSmallest(type, limit)
+            SortOrder.RANDOM -> dao.getActiveQueueBatchRandom(type, limit)
+        }
+    }
+
     suspend fun getFilesInFolder(folderPath: String, type: MediaType): List<MediaFile> {
         return dao.getFilesInFolder(folderPath, type)
     }
 
     suspend fun getFilesInFolderBatch(folderPath: String, type: MediaType, limit: Int = 300): List<MediaFile> {
         return dao.getFilesInFolderBatch(folderPath, type, limit)
+    }
+
+    suspend fun getFilesInFolderBatch(folderPath: String, type: MediaType, sortOrder: SortOrder, limit: Int = 300): List<MediaFile> {
+        return when (sortOrder) {
+            SortOrder.NEWEST_FIRST -> dao.getFilesInFolderBatchNewest(folderPath, type, limit)
+            SortOrder.OLDEST_FIRST -> dao.getFilesInFolderBatchOldest(folderPath, type, limit)
+            SortOrder.LARGEST_FIRST -> dao.getFilesInFolderBatchLargest(folderPath, type, limit)
+            SortOrder.SMALLEST_FIRST -> dao.getFilesInFolderBatchSmallest(folderPath, type, limit)
+            SortOrder.RANDOM -> dao.getFilesInFolderBatchRandom(folderPath, type, limit)
+        }
+    }
+
+    suspend fun updateDatesIfMissing(path: String, dateTaken: Long, dateModified: Long) {
+        dao.updateDatesIfMissing(path, dateTaken, dateModified)
     }
 
     suspend fun getFolderSummaries(type: MediaType): List<FolderSummary> {
